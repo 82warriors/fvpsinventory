@@ -12,7 +12,7 @@ def load_data(gid, name):
     try:
         df = pd.read_csv(BASE_URL + gid, header=2)
 
-        # Remove empty rows
+        # Remove completely empty rows
         df = df.dropna(how="all")
 
         # Clean column names
@@ -21,11 +21,17 @@ def load_data(gid, name):
         # Remove "Unnamed" columns
         df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
 
-        # 🚨 Remove rows with no real data
-        if "EquipmentType" in df.columns:
-            df = df.dropna(subset=["EquipmentType"], how="all")
+        # Convert "None" text to actual null
+        df.replace("None", pd.NA, inplace=True)
 
-        # Track sheet source
+        # 🚨 Remove rows with no meaningful data
+        important_cols = ["AssetNo", "SerialNumber", "BrandModel", "EquipmentType"]
+        existing_cols = [col for col in important_cols if col in df.columns]
+
+        if existing_cols:
+            df = df.dropna(subset=existing_cols, how="all")
+
+        # Track sheet source (optional)
         df["Source"] = name
 
         return df
@@ -50,7 +56,7 @@ df = pd.concat([ssoe, lvl1, lvl2, lvl3, lvl4, lvl6, others], ignore_index=True)
 df = df.dropna(how="all").reset_index(drop=True)
 
 # ==================================================
-# FILTERS
+# 🔍 FILTERS (DYNAMIC)
 # ==================================================
 st.subheader("🔍 Filters")
 
@@ -67,14 +73,13 @@ with col1:
         category = "All"
 
 # -----------------------------
-# DYNAMIC EQUIPMENT FILTER
+# EQUIPMENT FILTER (DYNAMIC)
 # -----------------------------
 with col2:
     if "EquipmentType" in df.columns:
 
         if category == "All":
             eq_list = sorted(df["EquipmentType"].dropna().astype(str).unique())
-
         else:
             filtered_eq = df[df["Category"] == category]
             eq_list = sorted(filtered_eq["EquipmentType"].dropna().astype(str).unique())
@@ -83,6 +88,17 @@ with col2:
 
     else:
         eq = "All"
+
+# ==================================================
+# APPLY FILTERS
+# ==================================================
+filtered_df = df.copy()
+
+if category != "All":
+    filtered_df = filtered_df[filtered_df["Category"] == category]
+
+if eq != "All":
+    filtered_df = filtered_df[filtered_df["EquipmentType"] == eq]
 
 # ==================================================
 # DISPLAY (ONLY ONE TABLE)

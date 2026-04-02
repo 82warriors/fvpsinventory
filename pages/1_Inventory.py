@@ -13,9 +13,6 @@ st.title("📦 Inventory System")
 # ==================================================
 BASE_URL = "https://docs.google.com/spreadsheets/d/1lmCotLUgTLJBKska2y7od2LTPT_qooIFS0_zyVnRI0A/export?format=csv&gid="
 
-# ==================================================
-# LOAD DATA FUNCTION (CLEAN + SAFE)
-# ==================================================
 def load_data(gid, sheet_name):
     try:
         df = pd.read_csv(BASE_URL + gid, header=2)
@@ -26,24 +23,33 @@ def load_data(gid, sheet_name):
         df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
         df.replace("None", pd.NA, inplace=True)
 
-        # Ensure EquipmentType exists
+        # Clean EquipmentType
         if "EquipmentType" in df.columns:
             df["EquipmentType"] = df["EquipmentType"].astype(str).str.strip()
 
-        # ==================================================
-        # FORCE CATEGORY (THIS IS THE KEY FIX)
-        # ==================================================
+        # =========================
+        # FORCE CATEGORY
+        # =========================
         if sheet_name == "SSOE":
             df["Category"] = "SSOE"
         else:
             df["Category"] = "NON-SSOE"
+
+        # =========================
+        # 🚨 REMOVE EMPTY ROWS PROPERLY
+        # =========================
+        # Keep only rows with actual equipment
+        if "EquipmentType" in df.columns:
+            df = df[df["EquipmentType"].notna()]
+            df = df[df["EquipmentType"] != ""]
+            df = df[df["EquipmentType"] != "nan"]
 
         return df
 
     except Exception as e:
         st.warning(f"Error loading {sheet_name}: {e}")
         return pd.DataFrame()
-
+        
 # ==================================================
 # LOAD ALL SHEETS
 # ==================================================

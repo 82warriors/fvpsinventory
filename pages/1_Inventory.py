@@ -39,7 +39,7 @@ def load_data(gid, sheet_name, header_row):
         df.columns = df.columns.astype(str).str.strip()
         df = df.loc[:, ~df.columns.str.contains("^Unnamed", na=False)]
 
-        # Clean EquipmentType
+        # Clean EquipmentType (DO NOT DROP ROWS)
         if "EquipmentType" in df.columns:
             df["EquipmentType"] = (
                 df["EquipmentType"]
@@ -48,42 +48,49 @@ def load_data(gid, sheet_name, header_row):
                 .replace({"nan": None, "None": None, "": None})
             )
 
-        # ==================================================
-        # FORCE CATEGORY
-        # ==================================================
+        # Force Category
         if sheet_name == "SSOE":
             df["Category"] = "SSOE"
         else:
             df["Category"] = "NON-SSOE"
 
-        # ==================================================
-        # ALIGN TO MASTER STRUCTURE
-        # ==================================================
+        # Align to MASTER structure
         for col in MASTER_COLUMNS:
             if col not in df.columns:
                 df[col] = None
 
-        df = df[MASTER_COLUMNS]
-
-        return df
+        return df[MASTER_COLUMNS]
 
     except Exception as e:
         st.error(f"Error loading {sheet_name}: {e}")
         return pd.DataFrame(columns=MASTER_COLUMNS)
 
 # ==================================================
-# LOAD DATA
+# LOAD DATA (CORRECT HEADERS)
 # ==================================================
-ssoe = load_data("555308035", "SSOE", header_row=5)
+ssoe = load_data("555308035", "SSOE", header_row=3)
 
-lvl1 = load_data("1895613573", "Level 1", header_row=5)
-lvl2 = load_data("451567212", "Level 2", header_row=5)
-lvl3 = load_data("365079300", "Level 3", header_row=5)
-lvl4 = load_data("1105352624", "Level 4", header_row=5)
-lvl6 = load_data("1046028540", "Level 6", header_row=5)
-others = load_data("1253302028", "Others", header_row=4)
+lvl1 = load_data("1895613573", "Level 1", header_row=3)
+lvl2 = load_data("451567212", "Level 2", header_row=3)
+lvl3 = load_data("365079300", "Level 3", header_row=3)
+lvl4 = load_data("1105352624", "Level 4", header_row=3)
+lvl6 = load_data("1046028540", "Level 6", header_row=3)
 
+others = load_data("1253302028", "Others", header_row=2)
+
+# Combine all
 df = pd.concat([ssoe, lvl1, lvl2, lvl3, lvl4, lvl6, others], ignore_index=True)
+
+# Remove fully empty rows
+df = df.dropna(how="all")
+
+# ==================================================
+# DEBUG (REMOVE LATER)
+# ==================================================
+st.write("SSOE rows:", len(ssoe))
+st.write("Level rows:", len(lvl1))
+st.write("Others rows:", len(others))
+st.write("Total rows:", len(df))
 
 # ==================================================
 # FILTERS
@@ -138,6 +145,6 @@ st.subheader("📋 Inventory Data")
 st.dataframe(
     filtered_df,
     use_container_width=True,
-    height=600,
+    height=650,
     hide_index=True
 )

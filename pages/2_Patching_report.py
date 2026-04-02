@@ -71,7 +71,25 @@ def style_table(df):
 # ==================================================
 st.subheader("📋 Raw Data")
 
-styled_df = style_table(filtered_df)
+styled_df = (
+    filtered_df.style
+    .set_table_styles([
+        {
+            "selector": "thead th",
+            "props": [
+                ("background-color", "#1f77b4"),
+                ("color", "white"),
+                ("font-weight", "bold"),
+                ("text-align", "center"),
+                ("border", "1px solid black")
+            ]
+        }
+    ])
+    .set_properties(**{
+        "text-align": "center",
+        "border": "1px solid #ddd"
+    })
+)
 
-# ⚠️ IMPORTANT: use st.write for styling
+# ✅ THIS IS THE FIX
 st.write(styled_df)

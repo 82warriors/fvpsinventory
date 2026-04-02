@@ -18,7 +18,7 @@ BASE_URL = "https://docs.google.com/spreadsheets/d/1lmCotLUgTLJBKska2y7od2LTPT_q
 # ==================================================
 def load_data(gid, sheet_name):
     try:
-        df = pd.read_csv(BASE_URL + gid, header=2)
+        df = pd.read_csv(BASE_URL + gid, header=5)
 
         # Basic cleanup only (DO NOT over-clean)
         df.columns = df.columns.str.strip()

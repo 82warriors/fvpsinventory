@@ -20,6 +20,7 @@ URL = "https://docs.google.com/spreadsheets/d/1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G
 def load_data():
     df = pd.read_csv(URL, header=1)
 
+    # Clean columns
     df.columns = df.columns.str.strip()
     df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
 
@@ -28,7 +29,21 @@ def load_data():
 df = load_data()
 
 # ==================================================
-# 🎨 STYLING FUNCTION
+# FILTER (OPTIONAL)
+# ==================================================
+if "Week" in df.columns:
+    week_list = sorted(df["Week"].dropna().unique())
+    selected_week = st.selectbox("Select Week", ["All"] + week_list)
+else:
+    selected_week = "All"
+
+filtered_df = df.copy()
+
+if selected_week != "All":
+    filtered_df = filtered_df[filtered_df["Week"] == selected_week]
+
+# ==================================================
+# 🎨 STYLING FUNCTION (HEADER + CELLS)
 # ==================================================
 def style_table(df):
     return (
@@ -40,12 +55,14 @@ def style_table(df):
                     ("background-color", "#1f77b4"),
                     ("color", "white"),
                     ("font-weight", "bold"),
-                    ("text-align", "center")
+                    ("text-align", "center"),
+                    ("border", "1px solid black")
                 ]
             }
         ])
         .set_properties(**{
-            "text-align": "center"
+            "text-align": "center",
+            "border": "1px solid #ddd"
         })
     )
 
@@ -56,8 +73,5 @@ st.subheader("📋 Raw Data")
 
 styled_df = style_table(filtered_df)
 
-st.dataframe(
-    styled_df,
-    use_container_width=True,
-    height=600
-)
+# ⚠️ IMPORTANT: use st.write for styling
+st.write(styled_df)

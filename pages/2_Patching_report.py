@@ -18,7 +18,7 @@ URL = "https://docs.google.com/spreadsheets/d/1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G
 # ==================================================
 @st.cache_data
 def load_data():
-    df = pd.read_csv(URL, header=2)
+    df = pd.read_csv(URL, header=1)
 
     # Clean headers
     df.columns = df.columns.str.strip()

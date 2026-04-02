@@ -4,96 +4,45 @@ import pandas as pd
 # ==================================================
 # PAGE CONFIG
 # ==================================================
-st.set_page_config(
-    page_title="FVPS Inventory",
-    layout="wide"
-)
+st.set_page_config(page_title="FVPS Inventory", layout="wide")
 
 st.title("📦 Inventory System")
 
 # ==================================================
-# CUSTOM UI STYLING
-# ==================================================
-st.markdown("""
-<style>
-.block-container {
-    padding-top: 1rem;
-}
-.stDataFrame {
-    border-radius: 10px;
-    overflow: hidden;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# ==================================================
-# LOAD DATA FROM GOOGLE SHEETS
+# GOOGLE SHEET BASE URL
 # ==================================================
 BASE_URL = "https://docs.google.com/spreadsheets/d/1lmCotLUgTLJBKska2y7od2LTPT_qooIFS0_zyVnRI0A/export?format=csv&gid="
 
-def load_data(gid, name):
+# ==================================================
+# LOAD DATA FUNCTION (CLEAN + SAFE)
+# ==================================================
+def load_data(gid, sheet_name):
     try:
         df = pd.read_csv(BASE_URL + gid, header=2)
 
-        # Remove empty rows
+        # Basic cleanup
         df = df.dropna(how="all")
-
-        # Clean headers
         df.columns = df.columns.str.strip()
-
-        # Remove "Unnamed"
         df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
-
-        # Replace "None" text
         df.replace("None", pd.NA, inplace=True)
 
-        # =========================
-        # 🔥 FORCE CATEGORY (CRITICAL FIX)
-        # =========================
-        if "Category" in df.columns:
-            df["Category"] = (
-                df["Category"]
-                .astype(str)
-                .str.strip()
-                .str.upper()
-            )
-
-        # 🚨 FORCE SSOE FOR SSOE SHEET
-        if name == "SSOE":
-            df["Category"] = "SSOE"
-
-        # Standardise NON-SSOE
-        if "Category" in df.columns:
-            df["Category"] = df["Category"].replace({
-                "NON SSOE": "NON-SSOE",
-                "NON-SSOE": "NON-SSOE"
-            })
-
-# ==================================================
-# KEEP VALID ROWS (DIFFERENT LOGIC FOR SSOE)
-# ==================================================
-if name == "SSOE":
-    # For SSOE: keep rows if EquipmentType exists
-    if "EquipmentType" in df.columns:
-        df = df[df["EquipmentType"].notna()]
-else:
-    # For other sheets: stricter cleaning
-    important_cols = ["AssetNo", "SerialNumber", "BrandModel", "EquipmentType"]
-    existing_cols = [col for col in important_cols if col in df.columns]
-
-    if existing_cols:
-        df = df.dropna(subset=existing_cols, how="all")
-
-        # Clean EquipmentType
+        # Ensure EquipmentType exists
         if "EquipmentType" in df.columns:
             df["EquipmentType"] = df["EquipmentType"].astype(str).str.strip()
+
+        # ==================================================
+        # FORCE CATEGORY (THIS IS THE KEY FIX)
+        # ==================================================
+        if sheet_name == "SSOE":
+            df["Category"] = "SSOE"
+        else:
+            df["Category"] = "NON-SSOE"
 
         return df
 
     except Exception as e:
-        st.warning(f"Error loading {name}: {e}")
+        st.warning(f"Error loading {sheet_name}: {e}")
         return pd.DataFrame()
-
 
 # ==================================================
 # LOAD ALL SHEETS
@@ -106,21 +55,22 @@ lvl4 = load_data("1105352624", "Level 4")
 lvl6 = load_data("1046028540", "Level 6")
 others = load_data("1253302028", "Others")
 
+# Combine everything
 df = pd.concat([ssoe, lvl1, lvl2, lvl3, lvl4, lvl6, others], ignore_index=True)
 df = df.dropna(how="all").reset_index(drop=True)
 
 # ==================================================
-# 🔍 FILTERS (RESPONSIVE)
+# FILTERS
 # ==================================================
 st.subheader("🔍 Filters")
 
 col1, col2 = st.columns(2)
 
-# CATEGORY (FIXED OPTIONS)
+# CATEGORY FILTER (FIXED)
 with col1:
     category = st.selectbox("Category", ["All", "SSOE", "NON-SSOE"])
 
-# EQUIPMENT (DYNAMIC)
+# EQUIPMENT FILTER (DYNAMIC)
 with col2:
     if "EquipmentType" in df.columns:
 
@@ -134,7 +84,7 @@ with col2:
                 .unique()
             )
 
-        else:  # NON-SSOE
+        else:
             eq_list = sorted(
                 df[df["Category"] == "NON-SSOE"]["EquipmentType"]
                 .dropna()
@@ -158,7 +108,7 @@ if eq != "All":
     filtered_df = filtered_df[filtered_df["EquipmentType"] == eq]
 
 # ==================================================
-# 📊 SUMMARY CARDS
+# SUMMARY CARDS
 # ==================================================
 st.subheader("📊 Overview")
 
@@ -169,7 +119,7 @@ c2.metric("SSOE", len(filtered_df[filtered_df["Category"] == "SSOE"]))
 c3.metric("NON-SSOE", len(filtered_df[filtered_df["Category"] == "NON-SSOE"]))
 
 # ==================================================
-# 🔎 SEARCH
+# SEARCH
 # ==================================================
 search = st.text_input("🔎 Search")
 
@@ -180,7 +130,7 @@ if search:
     ]
 
 # ==================================================
-# 📋 DISPLAY TABLE (FULL WIDTH)
+# DISPLAY TABLE
 # ==================================================
 st.subheader("📋 Inventory Data")
 

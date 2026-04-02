@@ -17,15 +17,11 @@ def load_data(gid, sheet_name):
     try:
         df = pd.read_csv(BASE_URL + gid, header=2)
 
-        # Basic cleanup
+        # Clean base
         df = df.dropna(how="all")
         df.columns = df.columns.str.strip()
         df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
         df.replace("None", pd.NA, inplace=True)
-
-        # Clean EquipmentType
-        if "EquipmentType" in df.columns:
-            df["EquipmentType"] = df["EquipmentType"].astype(str).str.strip()
 
         # =========================
         # FORCE CATEGORY
@@ -36,13 +32,17 @@ def load_data(gid, sheet_name):
             df["Category"] = "NON-SSOE"
 
         # =========================
-        # 🚨 REMOVE EMPTY ROWS PROPERLY
+        # CLEAN EQUIPMENT TYPE
         # =========================
-        # Keep only rows with actual equipment
         if "EquipmentType" in df.columns:
-            df = df[df["EquipmentType"].notna()]
-            df = df[df["EquipmentType"] != ""]
-            df = df[df["EquipmentType"] != "nan"]
+            df["EquipmentType"] = df["EquipmentType"].astype(str).str.strip()
+
+            # 🚨 KEEP only rows with real equipment
+            df = df[
+                (df["EquipmentType"].notna()) &
+                (df["EquipmentType"] != "") &
+                (df["EquipmentType"].str.lower() != "nan")
+            ]
 
         return df
 

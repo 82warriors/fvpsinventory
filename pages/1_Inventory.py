@@ -71,12 +71,12 @@ def load_data(gid, sheet_name, header_row):
 # ==================================================
 ssoe = load_data("555308035", "SSOE", header_row=5)
 
-lvl1 = load_data("1895613573", "Level 1", header_row=0)
-lvl2 = load_data("451567212", "Level 2", header_row=0)
-lvl3 = load_data("365079300", "Level 3", header_row=0)
-lvl4 = load_data("1105352624", "Level 4", header_row=0)
-lvl6 = load_data("1046028540", "Level 6", header_row=0)
-others = load_data("1253302028", "Others", header_row=0)
+lvl1 = load_data("1895613573", "Level 1", header_row=5)
+lvl2 = load_data("451567212", "Level 2", header_row=5)
+lvl3 = load_data("365079300", "Level 3", header_row=5)
+lvl4 = load_data("1105352624", "Level 4", header_row=5)
+lvl6 = load_data("1046028540", "Level 6", header_row=5)
+others = load_data("1253302028", "Others", header_row=4)
 
 # Combine into ONE table
 df = pd.concat([ssoe, lvl1, lvl2, lvl3, lvl4, lvl6, others], ignore_index=True)

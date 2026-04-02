@@ -18,9 +18,8 @@ URL = "https://docs.google.com/spreadsheets/d/1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G
 # ==================================================
 @st.cache_data
 def load_data():
-    df = pd.read_csv(URL, header=1)
+    df = pd.read_csv(URL, header=3)
 
-    # Clean headers
     df.columns = df.columns.str.strip()
     df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
 
@@ -29,7 +28,7 @@ def load_data():
 df = load_data()
 
 # ==================================================
-# FILTER - WEEK
+# FILTER
 # ==================================================
 st.subheader("📅 Filter by Week")
 
@@ -39,38 +38,55 @@ if "Week" in df.columns:
 else:
     selected_week = "All"
 
-# Apply filter
 filtered_df = df.copy()
 
 if selected_week != "All":
     filtered_df = filtered_df[filtered_df["Week"] == selected_week]
 
 # ==================================================
-# SUMMARY DASHBOARD
+# SUMMARY
 # ==================================================
 st.subheader("📊 Summary")
 
 if "Status" in filtered_df.columns:
     summary = filtered_df.groupby("Status")["Count"].sum().reset_index()
 
-    col1, col2, col3 = st.columns(3)
+    cols = st.columns(len(summary))
 
     for i, row in summary.iterrows():
-        if i % 3 == 0:
-            col1.metric(row["Status"], int(row["Count"]))
-        elif i % 3 == 1:
-            col2.metric(row["Status"], int(row["Count"]))
-        else:
-            col3.metric(row["Status"], int(row["Count"]))
+        cols[i].metric(row["Status"], int(row["Count"]))
 
 # ==================================================
-# RAW DATA
+# 🎨 STYLING FUNCTION
+# ==================================================
+def style_table(df):
+    return (
+        df.style
+        .set_table_styles([
+            {
+                "selector": "thead th",
+                "props": [
+                    ("background-color", "#1f77b4"),
+                    ("color", "white"),
+                    ("font-weight", "bold"),
+                    ("text-align", "center")
+                ]
+            }
+        ])
+        .set_properties(**{
+            "text-align": "center"
+        })
+    )
+
+# ==================================================
+# DISPLAY
 # ==================================================
 st.subheader("📋 Raw Data")
 
+styled_df = style_table(filtered_df)
+
 st.dataframe(
-    filtered_df,
+    styled_df,
     use_container_width=True,
-    height=600,
-    hide_index=True
+    height=600
 )

@@ -9,13 +9,17 @@ st.set_page_config(page_title="FVPS Inventory", layout="wide")
 st.title("📦 Inventory System")
 
 # ==================================================
-# MASTER COLUMN STRUCTURE (UNIFIED)
+# MASTER COLUMN STRUCTURE (UNION OF ALL)
 # ==================================================
 MASTER_COLUMNS = [
-    "Status","Category","EquipmentType","Vendor","BrandModel","Profile","Custodian",
-    "AssetNo","SerialNumber","Location","Venue",
-    "StartDate","EndDate","Hostname","SSOE PO Number","Cart No",
+    "Status","Category","EquipmentType","Vendor","BrandModel",
+    "Profile","Custodian",
+    "AssetNo","SerialNumber",
+    "Location","Venue",
+    "StartDate","EndDate",
+    "Hostname","SSOE PO Number","Cart No",
     "What's in the box","Upgrade Item List","Addon Item List","Bundle Item list",
+    "Lamp Hour","HDMI",
     "Duration in Use","Fault","Last Updated","Remarks"
 ]
 
@@ -44,20 +48,21 @@ def load_data(gid, sheet_name, header_row):
                 .replace({"nan": None, "None": None, "": None})
             )
 
-        # Force Category
+        # ==================================================
+        # FORCE CATEGORY
+        # ==================================================
         if sheet_name == "SSOE":
             df["Category"] = "SSOE"
         else:
             df["Category"] = "NON-SSOE"
 
         # ==================================================
-        # ALIGN TO MASTER COLUMNS
+        # ALIGN TO MASTER STRUCTURE
         # ==================================================
         for col in MASTER_COLUMNS:
             if col not in df.columns:
                 df[col] = None
 
-        # Keep only master columns
         df = df[MASTER_COLUMNS]
 
         return df
@@ -78,7 +83,6 @@ lvl4 = load_data("1105352624", "Level 4", header_row=5)
 lvl6 = load_data("1046028540", "Level 6", header_row=5)
 others = load_data("1253302028", "Others", header_row=4)
 
-# Combine into ONE table
 df = pd.concat([ssoe, lvl1, lvl2, lvl3, lvl4, lvl6, others], ignore_index=True)
 
 # ==================================================

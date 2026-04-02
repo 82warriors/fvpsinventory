@@ -10,7 +10,6 @@ st.dataframe(df)
 
 if "Week" in df.columns:
     week = st.selectbox("Select Week", ["All"] + list(df["Week"].dropna().unique()))
-    if week != "All":
-        df = df[df["Week"] == week]
 
-st.dataframe(df)
+    if week != "All":
+        st.dataframe(df[df["Week"] == week])

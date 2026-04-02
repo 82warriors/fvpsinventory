@@ -85,14 +85,6 @@ df = pd.concat([ssoe, lvl1, lvl2, lvl3, lvl4, lvl6, others], ignore_index=True)
 df = df.dropna(how="all")
 
 # ==================================================
-# DEBUG (REMOVE LATER)
-# ==================================================
-st.write("SSOE rows:", len(ssoe))
-st.write("Level rows:", len(lvl1))
-st.write("Others rows:", len(others))
-st.write("Total rows:", len(df))
-
-# ==================================================
 # FILTERS
 # ==================================================
 st.subheader("🔍 Filters")

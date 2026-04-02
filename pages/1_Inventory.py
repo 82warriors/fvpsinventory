@@ -50,13 +50,15 @@ df = pd.concat([ssoe, lvl1, lvl2, lvl3, lvl4, lvl6, others], ignore_index=True)
 df = df.dropna(how="all").reset_index(drop=True)
 
 # ==================================================
-# 📦 FILTERS (FIXED)
+# FILTERS
 # ==================================================
 st.subheader("🔍 Filters")
 
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 
-# ✅ FIX: Use Category instead of Source
+# -----------------------------
+# CATEGORY FILTER
+# -----------------------------
 with col1:
     if "Category" in df.columns:
         category_list = sorted(df["Category"].dropna().astype(str).unique())
@@ -64,33 +66,23 @@ with col1:
     else:
         category = "All"
 
+# -----------------------------
+# DYNAMIC EQUIPMENT FILTER
+# -----------------------------
 with col2:
     if "EquipmentType" in df.columns:
-        eq_list = sorted(df["EquipmentType"].dropna().astype(str).unique())
+
+        if category == "All":
+            eq_list = sorted(df["EquipmentType"].dropna().astype(str).unique())
+
+        else:
+            filtered_eq = df[df["Category"] == category]
+            eq_list = sorted(filtered_eq["EquipmentType"].dropna().astype(str).unique())
+
         eq = st.selectbox("Equipment", ["All"] + eq_list)
+
     else:
         eq = "All"
-
-with col3:
-    if "Location" in df.columns:
-        loc_list = sorted(df["Location"].dropna().astype(str).unique())
-        loc = st.selectbox("Location", ["All"] + loc_list)
-    else:
-        loc = "All"
-
-# ==================================================
-# APPLY FILTERS
-# ==================================================
-filtered_df = df.copy()
-
-if category != "All":
-    filtered_df = filtered_df[filtered_df["Category"] == category]
-
-if eq != "All":
-    filtered_df = filtered_df[filtered_df["EquipmentType"] == eq]
-
-if loc != "All":
-    filtered_df = filtered_df[filtered_df["Location"] == loc]
 
 # ==================================================
 # DISPLAY (ONLY ONE TABLE)

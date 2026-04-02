@@ -5,22 +5,23 @@ st.title("📊 Dashboard")
 
 url = "https://docs.google.com/spreadsheets/d/1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE/export?format=csv"
 df = pd.read_csv(url)
+df.columns = df.columns.str.strip()
 
-if all(col in df.columns for col in ["Week","Status","Count"]):
+try:
+    df_long = df.melt(id_vars=["Week"], var_name="Type", value_name="Count")
+    df_long[["Category", "Status"]] = df_long["Type"].str.split(" ", n=1, expand=True)
 
-    summary = df.groupby(["Week","Status"])["Count"].sum().unstack().fillna(0)
+    summary = df_long.groupby(["Week","Status"])["Count"].sum().unstack().fillna(0)
 
-    st.subheader("📊 Weekly Status")
-    st.dataframe(summary)
     st.line_chart(summary)
 
-    installed = df[df["Status"] == "Installed"].groupby("Week")["Count"].sum()
-    total = df.groupby("Week")["Count"].sum()
+    installed = df_long[df_long["Status"] == "Installed"].groupby("Week")["Count"].sum()
+    total = df_long.groupby("Week")["Count"].sum()
 
     percent = (installed / total * 100).round(2)
 
     st.subheader("📈 Patching %")
     st.line_chart(percent)
 
-else:
-    st.warning("⚠️ Your patching sheet must have: Week, Status, Count")
+except:
+    st.warning("Check patching format")

@@ -39,7 +39,11 @@ def load_data(gid, name):
     except Exception as e:
         st.warning(f"Error loading {name}: {e}")
         return pd.DataFrame()
-
+        
+# ✅ Clean Category values
+if "Category" in df.columns:
+    df["Category"] = df["Category"].astype(str).str.strip().str.upper()
+    
 # ==================================================
 # LOAD ALL SHEETS
 # ==================================================

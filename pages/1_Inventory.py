@@ -1,7 +1,30 @@
 import streamlit as st
 import pandas as pd
 
-st.title("📦 Inventory")
+# ==================================================
+# PAGE CONFIG
+# ==================================================
+st.set_page_config(
+    page_title="FVPS Inventory",
+    layout="wide"
+)
+
+st.title("📦 Inventory System")
+
+# ==================================================
+# CUSTOM UI STYLING
+# ==================================================
+st.markdown("""
+<style>
+.block-container {
+    padding-top: 1rem;
+}
+.stDataFrame {
+    border-radius: 10px;
+    overflow: hidden;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ==================================================
 # LOAD DATA FROM GOOGLE SHEETS
@@ -18,14 +41,14 @@ def load_data(gid, name):
         # Clean headers
         df.columns = df.columns.str.strip()
 
-        # Remove Unnamed columns
+        # Remove "Unnamed"
         df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
 
-        # Convert "None" to null
+        # Replace "None" text
         df.replace("None", pd.NA, inplace=True)
 
         # =========================
-        # FIX CATEGORY VALUES
+        # 🔥 FORCE CATEGORY (CRITICAL FIX)
         # =========================
         if "Category" in df.columns:
             df["Category"] = (
@@ -35,10 +58,15 @@ def load_data(gid, name):
                 .str.upper()
             )
 
+        # 🚨 FORCE SSOE FOR SSOE SHEET
+        if name == "SSOE":
+            df["Category"] = "SSOE"
+
+        # Standardise NON-SSOE
+        if "Category" in df.columns:
             df["Category"] = df["Category"].replace({
                 "NON SSOE": "NON-SSOE",
-                "NON-SSOE": "NON-SSOE",
-                "SSOE": "SSOE"
+                "NON-SSOE": "NON-SSOE"
             })
 
         # =========================
@@ -50,8 +78,9 @@ def load_data(gid, name):
         if existing_cols:
             df = df.dropna(subset=existing_cols, how="all")
 
-        # Track source (optional)
-        df["Source"] = name
+        # Clean EquipmentType
+        if "EquipmentType" in df.columns:
+            df["EquipmentType"] = df["EquipmentType"].astype(str).str.strip()
 
         return df
 
@@ -71,34 +100,23 @@ lvl4 = load_data("1105352624", "Level 4")
 lvl6 = load_data("1046028540", "Level 6")
 others = load_data("1253302028", "Others")
 
-# Combine
 df = pd.concat([ssoe, lvl1, lvl2, lvl3, lvl4, lvl6, others], ignore_index=True)
 df = df.dropna(how="all").reset_index(drop=True)
 
 # ==================================================
-# 🔍 FILTERS (FINAL LOGIC)
+# 🔍 FILTERS (RESPONSIVE)
 # ==================================================
 st.subheader("🔍 Filters")
 
 col1, col2 = st.columns(2)
 
-# -----------------------------
 # CATEGORY (FIXED OPTIONS)
-# -----------------------------
 with col1:
-    category = st.selectbox(
-        "Category",
-        ["All", "SSOE", "NON-SSOE"]
-    )
+    category = st.selectbox("Category", ["All", "SSOE", "NON-SSOE"])
 
-# -----------------------------
 # EQUIPMENT (DYNAMIC)
-# -----------------------------
 with col2:
     if "EquipmentType" in df.columns:
-
-        # Clean Equipment values
-        df["EquipmentType"] = df["EquipmentType"].astype(str).str.strip()
 
         if category == "All":
             eq_list = sorted(df["EquipmentType"].dropna().unique())
@@ -110,7 +128,7 @@ with col2:
                 .unique()
             )
 
-        elif category == "NON-SSOE":
+        else:  # NON-SSOE
             eq_list = sorted(
                 df[df["Category"] == "NON-SSOE"]["EquipmentType"]
                 .dropna()
@@ -134,7 +152,35 @@ if eq != "All":
     filtered_df = filtered_df[filtered_df["EquipmentType"] == eq]
 
 # ==================================================
-# DISPLAY (ONLY ONE TABLE)
+# 📊 SUMMARY CARDS
+# ==================================================
+st.subheader("📊 Overview")
+
+c1, c2, c3 = st.columns(3)
+
+c1.metric("Total Devices", len(filtered_df))
+c2.metric("SSOE", len(filtered_df[filtered_df["Category"] == "SSOE"]))
+c3.metric("NON-SSOE", len(filtered_df[filtered_df["Category"] == "NON-SSOE"]))
+
+# ==================================================
+# 🔎 SEARCH
+# ==================================================
+search = st.text_input("🔎 Search")
+
+if search:
+    filtered_df = filtered_df[
+        filtered_df.astype(str)
+        .apply(lambda row: row.str.contains(search, case=False).any(), axis=1)
+    ]
+
+# ==================================================
+# 📋 DISPLAY TABLE (FULL WIDTH)
 # ==================================================
 st.subheader("📋 Inventory Data")
-st.dataframe(filtered_df, use_container_width=True)
+
+st.dataframe(
+    filtered_df,
+    use_container_width=True,
+    height=600,
+    hide_index=True
+)

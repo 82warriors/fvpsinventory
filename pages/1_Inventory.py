@@ -24,14 +24,33 @@ def load_data(gid, name):
         # Convert "None" text to actual null
         df.replace("None", pd.NA, inplace=True)
 
-        # 🚨 Remove rows with no meaningful data
+        # ==================================================
+        # 🔥 FIX CATEGORY (CRITICAL)
+        # ==================================================
+        if "Category" in df.columns:
+            df["Category"] = (
+                df["Category"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
+
+            df["Category"] = df["Category"].replace({
+                "NON SSOE": "NON-SSOE",
+                "NON-SSOE": "NON-SSOE",
+                "SSOE": "SSOE"
+            })
+
+        # ==================================================
+        # REMOVE EMPTY / USELESS ROWS
+        # ==================================================
         important_cols = ["AssetNo", "SerialNumber", "BrandModel", "EquipmentType"]
         existing_cols = [col for col in important_cols if col in df.columns]
 
         if existing_cols:
             df = df.dropna(subset=existing_cols, how="all")
 
-        # Track sheet source (optional)
+        # Track sheet source
         df["Source"] = name
 
         return df
@@ -39,11 +58,7 @@ def load_data(gid, name):
     except Exception as e:
         st.warning(f"Error loading {name}: {e}")
         return pd.DataFrame()
-        
-# ✅ Clean Category values
-if "Category" in df.columns:
-    df["Category"] = df["Category"].astype(str).str.strip().str.upper()
-    
+
 # ==================================================
 # LOAD ALL SHEETS
 # ==================================================
@@ -60,7 +75,7 @@ df = pd.concat([ssoe, lvl1, lvl2, lvl3, lvl4, lvl6, others], ignore_index=True)
 df = df.dropna(how="all").reset_index(drop=True)
 
 # ==================================================
-# 🔍 FILTERS (DYNAMIC)
+# 🔍 FILTERS (DYNAMIC + FIXED)
 # ==================================================
 st.subheader("🔍 Filters")
 
@@ -71,7 +86,7 @@ col1, col2 = st.columns(2)
 # -----------------------------
 with col1:
     if "Category" in df.columns:
-        category_list = sorted(df["Category"].dropna().astype(str).unique())
+        category_list = sorted(df["Category"].dropna().unique())
         category = st.selectbox("Category", ["All"] + category_list)
     else:
         category = "All"
@@ -83,10 +98,10 @@ with col2:
     if "EquipmentType" in df.columns:
 
         if category == "All":
-            eq_list = sorted(df["EquipmentType"].dropna().astype(str).unique())
+            eq_list = sorted(df["EquipmentType"].dropna().unique())
         else:
             filtered_eq = df[df["Category"] == category]
-            eq_list = sorted(filtered_eq["EquipmentType"].dropna().astype(str).unique())
+            eq_list = sorted(filtered_eq["EquipmentType"].dropna().unique())
 
         eq = st.selectbox("Equipment", ["All"] + eq_list)
 

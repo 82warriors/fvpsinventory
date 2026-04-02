@@ -69,14 +69,20 @@ def load_data(gid, name):
                 "NON-SSOE": "NON-SSOE"
             })
 
-        # =========================
-        # REMOVE EMPTY DEVICE ROWS
-        # =========================
-        important_cols = ["AssetNo", "SerialNumber", "BrandModel", "EquipmentType"]
-        existing_cols = [col for col in important_cols if col in df.columns]
+# ==================================================
+# KEEP VALID ROWS (DIFFERENT LOGIC FOR SSOE)
+# ==================================================
+if name == "SSOE":
+    # For SSOE: keep rows if EquipmentType exists
+    if "EquipmentType" in df.columns:
+        df = df[df["EquipmentType"].notna()]
+else:
+    # For other sheets: stricter cleaning
+    important_cols = ["AssetNo", "SerialNumber", "BrandModel", "EquipmentType"]
+    existing_cols = [col for col in important_cols if col in df.columns]
 
-        if existing_cols:
-            df = df.dropna(subset=existing_cols, how="all")
+    if existing_cols:
+        df = df.dropna(subset=existing_cols, how="all")
 
         # Clean EquipmentType
         if "EquipmentType" in df.columns:

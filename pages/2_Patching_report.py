@@ -28,35 +28,6 @@ def load_data():
 df = load_data()
 
 # ==================================================
-# FILTER
-# ==================================================
-st.subheader("📅 Filter by Week")
-
-if "Week" in df.columns:
-    week_list = sorted(df["Week"].dropna().unique())
-    selected_week = st.selectbox("Select Week", ["All"] + week_list)
-else:
-    selected_week = "All"
-
-filtered_df = df.copy()
-
-if selected_week != "All":
-    filtered_df = filtered_df[filtered_df["Week"] == selected_week]
-
-# ==================================================
-# SUMMARY
-# ==================================================
-st.subheader("📊 Summary")
-
-if "Status" in filtered_df.columns:
-    summary = filtered_df.groupby("Status")["Count"].sum().reset_index()
-
-    cols = st.columns(len(summary))
-
-    for i, row in summary.iterrows():
-        cols[i].metric(row["Status"], int(row["Count"]))
-
-# ==================================================
 # 🎨 STYLING FUNCTION
 # ==================================================
 def style_table(df):

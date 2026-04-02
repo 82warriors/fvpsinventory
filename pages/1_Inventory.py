@@ -46,6 +46,9 @@ def load_data(gid, sheet_name):
             # Keep only valid equipment rows
             df = df[df["EquipmentType"].notna()]
 
+        st.write("SSOE raw rows:", len(ssoe))
+        st.write(ssoe.head(5))
+
         # ==================================================
         # FORCE CATEGORY (NO DEPENDENCE ON SHEET DATA)
         # ==================================================
@@ -73,8 +76,7 @@ others = load_data("1253302028", "Others")
 
 df = pd.concat([ssoe, lvl1, lvl2, lvl3, lvl4, lvl6, others], ignore_index=True)
 
-st.write("SSOE raw rows:", len(ssoe))
-st.write(ssoe.head(5))
+
 
 # ==================================================
 # FILTERS

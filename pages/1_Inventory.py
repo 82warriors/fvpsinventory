@@ -12,21 +12,21 @@ def load_data(gid, name):
     try:
         df = pd.read_csv(BASE_URL + gid, header=2)
 
-        # Remove completely empty rows
+        # Remove empty rows
         df = df.dropna(how="all")
 
-        # Clean column names
+        # Clean headers
         df.columns = df.columns.str.strip()
 
-        # Remove "Unnamed" columns
+        # Remove Unnamed columns
         df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
 
-        # Convert "None" text to actual null
+        # Convert "None" to null
         df.replace("None", pd.NA, inplace=True)
 
-        # ==================================================
-        # 🔥 FIX CATEGORY (CRITICAL)
-        # ==================================================
+        # =========================
+        # FIX CATEGORY VALUES
+        # =========================
         if "Category" in df.columns:
             df["Category"] = (
                 df["Category"]
@@ -41,16 +41,16 @@ def load_data(gid, name):
                 "SSOE": "SSOE"
             })
 
-        # ==================================================
-        # REMOVE EMPTY / USELESS ROWS
-        # ==================================================
+        # =========================
+        # REMOVE EMPTY DEVICE ROWS
+        # =========================
         important_cols = ["AssetNo", "SerialNumber", "BrandModel", "EquipmentType"]
         existing_cols = [col for col in important_cols if col in df.columns]
 
         if existing_cols:
             df = df.dropna(subset=existing_cols, how="all")
 
-        # Track sheet source
+        # Track source (optional)
         df["Source"] = name
 
         return df
@@ -58,6 +58,7 @@ def load_data(gid, name):
     except Exception as e:
         st.warning(f"Error loading {name}: {e}")
         return pd.DataFrame()
+
 
 # ==================================================
 # LOAD ALL SHEETS
@@ -70,38 +71,51 @@ lvl4 = load_data("1105352624", "Level 4")
 lvl6 = load_data("1046028540", "Level 6")
 others = load_data("1253302028", "Others")
 
-# Combine all sheets
+# Combine
 df = pd.concat([ssoe, lvl1, lvl2, lvl3, lvl4, lvl6, others], ignore_index=True)
 df = df.dropna(how="all").reset_index(drop=True)
 
 # ==================================================
-# 🔍 FILTERS (DYNAMIC + FIXED)
+# 🔍 FILTERS (FINAL LOGIC)
 # ==================================================
 st.subheader("🔍 Filters")
 
 col1, col2 = st.columns(2)
 
 # -----------------------------
-# CATEGORY FILTER
+# CATEGORY (FIXED OPTIONS)
 # -----------------------------
 with col1:
-    if "Category" in df.columns:
-        category_list = sorted(df["Category"].dropna().unique())
-        category = st.selectbox("Category", ["All"] + category_list)
-    else:
-        category = "All"
+    category = st.selectbox(
+        "Category",
+        ["All", "SSOE", "NON-SSOE"]
+    )
 
 # -----------------------------
-# EQUIPMENT FILTER (DYNAMIC)
+# EQUIPMENT (DYNAMIC)
 # -----------------------------
 with col2:
     if "EquipmentType" in df.columns:
 
+        # Clean Equipment values
+        df["EquipmentType"] = df["EquipmentType"].astype(str).str.strip()
+
         if category == "All":
             eq_list = sorted(df["EquipmentType"].dropna().unique())
-        else:
-            filtered_eq = df[df["Category"] == category]
-            eq_list = sorted(filtered_eq["EquipmentType"].dropna().unique())
+
+        elif category == "SSOE":
+            eq_list = sorted(
+                df[df["Category"] == "SSOE"]["EquipmentType"]
+                .dropna()
+                .unique()
+            )
+
+        elif category == "NON-SSOE":
+            eq_list = sorted(
+                df[df["Category"] == "NON-SSOE"]["EquipmentType"]
+                .dropna()
+                .unique()
+            )
 
         eq = st.selectbox("Equipment", ["All"] + eq_list)
 

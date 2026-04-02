@@ -14,43 +14,27 @@ st.title("📦 Inventory System")
 BASE_URL = "https://docs.google.com/spreadsheets/d/1lmCotLUgTLJBKska2y7od2LTPT_qooIFS0_zyVnRI0A/export?format=csv&gid="
 
 # ==================================================
-# SAFE CLEAN FUNCTION
-# ==================================================
-def clean_text(series):
-    return (
-        series.astype(str)
-        .str.strip()
-        .replace({"nan": None, "None": None, "": None})
-    )
-
-# ==================================================
-# LOAD DATA FUNCTION
+# LOAD DATA (SAFE VERSION - NO DATA LOSS)
 # ==================================================
 def load_data(gid, sheet_name):
     try:
         df = pd.read_csv(BASE_URL + gid, header=2)
 
-        # Remove empty rows
-        df = df.dropna(how="all")
-
-        # Clean headers
+        # Basic cleanup only (DO NOT over-clean)
         df.columns = df.columns.str.strip()
-
-        # Remove unnamed columns
         df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
 
-        # Clean EquipmentType safely
+        # Clean EquipmentType but DO NOT drop rows
         if "EquipmentType" in df.columns:
-            df["EquipmentType"] = clean_text(df["EquipmentType"])
-
-            # Keep only valid equipment rows
-            df = df[df["EquipmentType"].notna()]
-
-        st.write("SSOE raw rows:", len(ssoe))
-        st.write(ssoe.head(5))
+            df["EquipmentType"] = (
+                df["EquipmentType"]
+                .astype(str)
+                .str.strip()
+                .replace({"nan": None, "None": None, "": None})
+            )
 
         # ==================================================
-        # FORCE CATEGORY (NO DEPENDENCE ON SHEET DATA)
+        # FORCE CATEGORY BASED ON SHEET (KEY FIX)
         # ==================================================
         if sheet_name == "SSOE":
             df["Category"] = "SSOE"
@@ -76,7 +60,10 @@ others = load_data("1253302028", "Others")
 
 df = pd.concat([ssoe, lvl1, lvl2, lvl3, lvl4, lvl6, others], ignore_index=True)
 
-
+# ==================================================
+# DEBUG (REMOVE LATER)
+# ==================================================
+st.write("SSOE rows:", len(df[df["Category"] == "SSOE"]))
 
 # ==================================================
 # FILTERS
@@ -102,8 +89,8 @@ with col2:
         else:
             eq_series = df[df["Category"] == "NON-SSOE"]["EquipmentType"]
 
-        # 🔥 SAFE UNIQUE LIST (NO ERROR)
-        eq_list = sorted(set(eq_series.dropna().astype(str)))
+        # SAFE UNIQUE VALUES
+        eq_list = sorted([x for x in eq_series.dropna().unique() if x is not None])
 
         eq = st.selectbox("Equipment", ["All"] + eq_list)
 
@@ -144,7 +131,7 @@ if search:
     ]
 
 # ==================================================
-# DISPLAY TABLE
+# DISPLAY
 # ==================================================
 st.subheader("📋 Inventory Data")
 

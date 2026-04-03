@@ -139,26 +139,26 @@ def render_table(df):
     }
 
     .custom-table th {
-        background-color: #1f77b4;
+        background-color: #2e7d32;  /* ✅ GREEN */
         color: white;
         font-weight: bold;
         padding: 10px;
-        border: 2px solid #333;
+        border: 2px solid #222;   /* ✅ DARKER BORDER */
         text-align: center;
     }
 
     .custom-table td {
         padding: 8px;
-        border: 1px solid #555;
+        border: 1px solid #444;   /* ✅ DARK GRID */
         text-align: center;
     }
 
     .custom-table tr:nth-child(even) {
-        background-color: #f9f9f9;
+        background-color: #f4f4f4;
     }
 
     .custom-table tr:hover {
-        background-color: #eef5ff;
+        background-color: #e8f5e9;  /* light green hover */
     }
     </style>
 

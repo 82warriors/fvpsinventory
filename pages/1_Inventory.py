@@ -38,7 +38,6 @@ def load_data(gid, sheet_name, header_row):
         df.columns = df.columns.astype(str).str.strip()
         df = df.loc[:, ~df.columns.str.contains("^Unnamed", na=False)]
 
-        # Normalize EquipmentType
         if "EquipmentType" in df.columns:
             df["EquipmentType"] = (
                 df["EquipmentType"]
@@ -171,10 +170,28 @@ def render_table(df):
 
     html += "</tr></thead><tbody>"
 
+    today = pd.to_datetime("today")
+
     for _, row in df.iterrows():
         html += "<tr>"
-        for val in row:
-            html += f"<td>{'' if pd.isna(val) else val}</td>"
+        for col, val in row.items():
+
+            style = ""
+
+            # Expiry highlight
+            if col in ["EndDate", "Expiry Date"] and pd.notna(val):
+                try:
+                    date_val = pd.to_datetime(val)
+
+                    if date_val < today:
+                        style = "background-color:#f8d7da;"   # expired
+                    elif date_val <= today + pd.Timedelta(days=30):
+                        style = "background-color:#fff3cd;"   # expiring soon
+                except:
+                    pass
+
+            html += f"<td style='{style}'>{'' if pd.isna(val) else val}</td>"
+
         html += "</tr>"
 
     html += "</tbody></table>"
@@ -182,8 +199,32 @@ def render_table(df):
     return html
 
 # ==================================================
-# DISPLAY
+# TABS
 # ==================================================
-st.subheader("📋 Inventory Data")
+tab1, tab2 = st.tabs(["📋 Full Inventory", "⏳ Expiry Tracking"])
 
-st.markdown(render_table(filtered_df), unsafe_allow_html=True)
+# -------------------------------
+# TAB 1 - FULL INVENTORY
+# -------------------------------
+with tab1:
+    st.subheader("📋 Inventory Data")
+    st.markdown(render_table(filtered_df), unsafe_allow_html=True)
+
+# -------------------------------
+# TAB 2 - EXPIRY
+# -------------------------------
+with tab2:
+    st.subheader("⏳ Expiry Tracking")
+
+    if "BrandModel" in filtered_df.columns and "EndDate" in filtered_df.columns:
+
+        expiry_df = filtered_df[["BrandModel", "EndDate"]].copy()
+        expiry_df = expiry_df.rename(columns={"EndDate": "Expiry Date"})
+
+        expiry_df = expiry_df.dropna(subset=["BrandModel", "Expiry Date"], how="all")
+        expiry_df = expiry_df.sort_values(by="Expiry Date", ascending=True)
+
+        st.markdown(render_table(expiry_df), unsafe_allow_html=True)
+
+    else:
+        st.warning("Expiry data not available.")

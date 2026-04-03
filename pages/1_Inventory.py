@@ -35,7 +35,19 @@ def load_data(gid, sheet_name, header_row):
     try:
         df = pd.read_csv(BASE_URL + gid, header=header_row)
 
-        df.columns = df.columns.astype(str).str.strip()
+        df.columns = df.columns.astype(str).str.strip()# 
+==================================================
+# FIX LOCATION FORMAT (2 DIGITS)
+# ==================================================
+if "Location" in df.columns:
+    df["Location"] = (
+        df["Location"]
+        .astype(str)
+        .str.replace(".0", "", regex=False)
+        .str.strip()
+        .apply(lambda x: x.zfill(2) if x.isdigit() else x)
+    )
+        
         df = df.loc[:, ~df.columns.str.contains("^Unnamed", na=False)]
 
         if "EquipmentType" in df.columns:

@@ -211,17 +211,23 @@ with tab1:
     st.markdown(render_table(filtered_df), unsafe_allow_html=True)
 
 # -------------------------------
-# TAB 2 - EXPIRY
+# TAB 2 - EXPIRY (GROUPED)
 # -------------------------------
 with tab2:
     st.subheader("⏳ Expiry Tracking")
 
     if "BrandModel" in filtered_df.columns and "EndDate" in filtered_df.columns:
 
-        expiry_df = filtered_df[["BrandModel", "EndDate"]].copy()
-        expiry_df = expiry_df.rename(columns={"EndDate": "Expiry Date"})
+        # 🔥 GROUP + COUNT (THIS IS YOUR CODE)
+        expiry_df = (
+            filtered_df
+            .groupby(["BrandModel", "EndDate"])
+            .size()
+            .reset_index(name="Count")
+            .rename(columns={"EndDate": "Expiry Date"})
+        )
 
-        expiry_df = expiry_df.dropna(subset=["BrandModel", "Expiry Date"], how="all")
+        # Sort by earliest expiry
         expiry_df = expiry_df.sort_values(by="Expiry Date", ascending=True)
 
         st.markdown(render_table(expiry_df), unsafe_allow_html=True)

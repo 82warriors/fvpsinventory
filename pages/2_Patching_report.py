@@ -20,7 +20,6 @@ URL = "https://docs.google.com/spreadsheets/d/1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G
 def load_data():
     df = pd.read_csv(URL, header=1)
 
-    # Clean columns
     df.columns = df.columns.str.strip()
     df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
 
@@ -29,7 +28,7 @@ def load_data():
 df = load_data()
 
 # ==================================================
-# FILTER (OPTIONAL)
+# FILTER
 # ==================================================
 if "Week" in df.columns:
     week_list = sorted(df["Week"].dropna().unique())
@@ -43,53 +42,62 @@ if selected_week != "All":
     filtered_df = filtered_df[filtered_df["Week"] == selected_week]
 
 # ==================================================
-# 🎨 STYLING FUNCTION (HEADER + CELLS)
+# 🎨 BUILD HTML TABLE (FULL CONTROL)
 # ==================================================
-def style_table(df):
-    return (
-        df.style
-        .set_table_styles([
-            {
-                "selector": "thead th",
-                "props": [
-                    ("background-color", "#1f77b4"),
-                    ("color", "white"),
-                    ("font-weight", "bold"),
-                    ("text-align", "center"),
-                    ("border", "1px solid black")
-                ]
-            }
-        ])
-        .set_properties(**{
-            "text-align": "center",
-            "border": "1px solid #ddd"
-        })
-    )
+def render_table(df):
+    html = """
+    <style>
+    .custom-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+    }
+
+    .custom-table th {
+        background-color: #1f77b4;
+        color: white;
+        font-weight: bold;
+        padding: 10px;
+        border: 2px solid #333;
+        text-align: center;
+    }
+
+    .custom-table td {
+        padding: 8px;
+        border: 1px solid #555;
+        text-align: center;
+    }
+
+    .custom-table tr:nth-child(even) {
+        background-color: #f9f9f9;
+    }
+    </style>
+
+    <table class="custom-table">
+        <thead>
+            <tr>
+    """
+
+    # Headers
+    for col in df.columns:
+        html += f"<th>{col}</th>"
+
+    html += "</tr></thead><tbody>"
+
+    # Rows
+    for _, row in df.iterrows():
+        html += "<tr>"
+        for val in row:
+            html += f"<td>{val}</td>"
+        html += "</tr>"
+
+    html += "</tbody></table>"
+
+    return html
 
 # ==================================================
 # DISPLAY
 # ==================================================
 st.subheader("📋 Raw Data")
 
-styled_df = (
-    filtered_df.style
-    .set_table_styles([
-        {
-            "selector": "thead th",
-            "props": [
-                ("background-color", "#1f77b4"),
-                ("color", "white"),
-                ("font-weight", "bold"),
-                ("text-align", "center"),
-                ("border", "1px solid black")
-            ]
-        }
-    ])
-    .set_properties(**{
-        "text-align": "center",
-        "border": "1px solid #ddd"
-    })
-)
-
-# ✅ THIS IS THE FIX
-st.write(styled_df)
+st.markdown(render_table(filtered_df), unsafe_allow_html=True)

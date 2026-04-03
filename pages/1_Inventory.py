@@ -35,21 +35,23 @@ def load_data(gid, sheet_name, header_row):
     try:
         df = pd.read_csv(BASE_URL + gid, header=header_row)
 
-        df.columns = df.columns.astype(str).str.strip()# 
-==================================================
-# FIX LOCATION FORMAT (2 DIGITS)
-# ==================================================
-if "Location" in df.columns:
-    df["Location"] = (
-        df["Location"]
-        .astype(str)
-        .str.replace(".0", "", regex=False)
-        .str.strip()
-        .apply(lambda x: x.zfill(2) if x.isdigit() else x)
-    )
-        
+        # Clean headers
+        df.columns = df.columns.astype(str).str.strip()
         df = df.loc[:, ~df.columns.str.contains("^Unnamed", na=False)]
 
+        # ==================================================
+        # FIX LOCATION FORMAT (2 DIGITS)
+        # ==================================================
+        if "Location" in df.columns:
+            df["Location"] = df["Location"].apply(
+                lambda x: str(int(float(x))).zfill(2)
+                if pd.notna(x) and str(x).replace('.', '', 1).isdigit()
+                else x
+            )
+
+        # ==================================================
+        # CLEAN EQUIPMENT TYPE
+        # ==================================================
         if "EquipmentType" in df.columns:
             df["EquipmentType"] = (
                 df["EquipmentType"]
@@ -59,8 +61,10 @@ if "Location" in df.columns:
                 .replace({"Nan": None, "None": None, "": None})
             )
 
+        # Force Category
         df["Category"] = "SSOE" if sheet_name == "SSOE" else "NON-SSOE"
 
+        # Align columns
         for col in MASTER_COLUMNS:
             if col not in df.columns:
                 df[col] = None
@@ -138,7 +142,7 @@ c2.metric("SSOE", len(filtered_df[filtered_df["Category"] == "SSOE"]))
 c3.metric("NON-SSOE", len(filtered_df[filtered_df["Category"] == "NON-SSOE"]))
 
 # ==================================================
-# 🎨 HTML TABLE RENDER
+# TABLE RENDER
 # ==================================================
 def render_table(df):
     html = """
@@ -190,15 +194,13 @@ def render_table(df):
 
             style = ""
 
-            # Expiry highlight
             if col in ["EndDate", "Expiry Date"] and pd.notna(val):
                 try:
                     date_val = pd.to_datetime(val)
-
                     if date_val < today:
-                        style = "background-color:#f8d7da;"   # expired
+                        style = "background-color:#f8d7da;"
                     elif date_val <= today + pd.Timedelta(days=30):
-                        style = "background-color:#fff3cd;"   # expiring soon
+                        style = "background-color:#fff3cd;"
                 except:
                     pass
 
@@ -215,22 +217,15 @@ def render_table(df):
 # ==================================================
 tab1, tab2 = st.tabs(["📋 Full Inventory", "⏳ Expiry Tracking"])
 
-# -------------------------------
-# TAB 1 - FULL INVENTORY
-# -------------------------------
 with tab1:
     st.subheader("📋 Inventory Data")
     st.markdown(render_table(filtered_df), unsafe_allow_html=True)
 
-# -------------------------------
-# TAB 2 - EXPIRY (GROUPED)
-# -------------------------------
 with tab2:
     st.subheader("⏳ Expiry Tracking")
 
     if "BrandModel" in filtered_df.columns and "EndDate" in filtered_df.columns:
 
-        # 🔥 GROUP + COUNT (THIS IS YOUR CODE)
         expiry_df = (
             filtered_df
             .groupby(["BrandModel", "EndDate"])
@@ -239,7 +234,6 @@ with tab2:
             .rename(columns={"EndDate": "Expiry Date"})
         )
 
-        # Sort by earliest expiry
         expiry_df = expiry_df.sort_values(by="Expiry Date", ascending=True)
 
         st.markdown(render_table(expiry_df), unsafe_allow_html=True)

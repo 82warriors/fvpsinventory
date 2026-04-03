@@ -4,9 +4,9 @@ import pandas as pd
 # ==================================================
 # PAGE CONFIG
 # ==================================================
-st.set_page_config(page_title="FVPS Inventory", layout="wide")
+st.subheader("📋 Inventory Data")
 
-st.title("📦 Inventory System")
+st.markdown(render_table(filtered_df), unsafe_allow_html=True)
 
 # ==================================================
 # MASTER COLUMN STRUCTURE (UNION OF ALL)
@@ -128,6 +128,61 @@ c1, c2, c3 = st.columns(3)
 c1.metric("Total Devices", len(filtered_df))
 c2.metric("SSOE", len(filtered_df[filtered_df["Category"] == "SSOE"]))
 c3.metric("NON-SSOE", len(filtered_df[filtered_df["Category"] == "NON-SSOE"]))
+
+def render_table(df):
+    html = """
+    <style>
+    .custom-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+    }
+
+    .custom-table th {
+        background-color: #1f77b4;
+        color: white;
+        font-weight: bold;
+        padding: 10px;
+        border: 2px solid #333;
+        text-align: center;
+    }
+
+    .custom-table td {
+        padding: 8px;
+        border: 1px solid #555;
+        text-align: center;
+    }
+
+    .custom-table tr:nth-child(even) {
+        background-color: #f9f9f9;
+    }
+
+    .custom-table tr:hover {
+        background-color: #eef5ff;
+    }
+    </style>
+
+    <table class="custom-table">
+        <thead>
+            <tr>
+    """
+
+    # Header
+    for col in df.columns:
+        html += f"<th>{col}</th>"
+
+    html += "</tr></thead><tbody>"
+
+    # Rows
+    for _, row in df.iterrows():
+        html += "<tr>"
+        for val in row:
+            html += f"<td>{'' if pd.isna(val) else val}</td>"
+        html += "</tr>"
+
+    html += "</tbody></table>"
+
+    return html
 
 # ==================================================
 # DISPLAY

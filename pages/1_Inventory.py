@@ -9,7 +9,7 @@ st.set_page_config(page_title="FVPS Inventory", layout="wide")
 st.title("📦 Inventory System")
 
 # ==================================================
-# MASTER COLUMN STRUCTURE
+# MASTER COLUMNS
 # ==================================================
 MASTER_COLUMNS = [
     "Status","Category","EquipmentType","Vendor","BrandModel",
@@ -29,7 +29,7 @@ MASTER_COLUMNS = [
 BASE_URL = "https://docs.google.com/spreadsheets/d/1lmCotLUgTLJBKska2y7od2LTPT_qooIFS0_zyVnRI0A/export?format=csv&gid="
 
 # ==================================================
-# LOAD DATA FUNCTION
+# LOAD FUNCTION
 # ==================================================
 def load_data(gid, sheet_name, header_row):
     try:
@@ -39,7 +39,7 @@ def load_data(gid, sheet_name, header_row):
         df.columns = df.columns.astype(str).str.strip()
         df = df.loc[:, ~df.columns.str.contains("^Unnamed", na=False)]
 
-        # Fix Location (01, 02, etc.)
+        # Fix Location
         if "Location" in df.columns:
             df["Location"] = df["Location"].apply(
                 lambda x: str(int(float(x))).zfill(2)
@@ -55,6 +55,16 @@ def load_data(gid, sheet_name, header_row):
                 .str.strip()
                 .str.title()
                 .replace({"Nan": None, "None": None, "": None})
+            )
+
+        # 🔥 Clean BrandModel (IMPORTANT FIX)
+        if "BrandModel" in df.columns:
+            df["BrandModel"] = (
+                df["BrandModel"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+                .replace({"NAN": None, "NONE": None, "": None})
             )
 
         # Force Category
@@ -74,20 +84,20 @@ def load_data(gid, sheet_name, header_row):
 # ==================================================
 # LOAD DATA
 # ==================================================
-ssoe = load_data("555308035", "SSOE", header_row=3)
+ssoe = load_data("555308035", "SSOE", 3)
 
-lvl1 = load_data("1895613573", "Level 1", header_row=3)
-lvl2 = load_data("451567212", "Level 2", header_row=3)
-lvl3 = load_data("365079300", "Level 3", header_row=3)
-lvl4 = load_data("1105352624", "Level 4", header_row=3)
-lvl6 = load_data("1046028540", "Level 6", header_row=3)
+lvl1 = load_data("1895613573", "Level 1", 3)
+lvl2 = load_data("451567212", "Level 2", 3)
+lvl3 = load_data("365079300", "Level 3", 3)
+lvl4 = load_data("1105352624", "Level 4", 3)
+lvl6 = load_data("1046028540", "Level 6", 3)
 
-others = load_data("1253302028", "Others", header_row=2)
+others = load_data("1253302028", "Others", 2)
 
 df = pd.concat([ssoe, lvl1, lvl2, lvl3, lvl4, lvl6, others], ignore_index=True)
 
 # ==================================================
-# 🔥 REMOVE EMPTY ROWS (KEY FIX)
+# REMOVE EMPTY ROWS
 # ==================================================
 df = df[
     df["BrandModel"].notna() &
@@ -105,23 +115,16 @@ with col1:
     category = st.selectbox("Category", ["All", "SSOE", "NON-SSOE"])
 
 with col2:
-    if "EquipmentType" in df.columns:
+    if category == "SSOE":
+        eq_list = ["Printer", "Notebook", "Mobile Devices", "Others", "Wog"]
 
-        if category == "SSOE":
-            eq_list = ["Printer", "Notebook", "Mobile Devices", "Others", "Wog"]
-
-        elif category == "NON-SSOE":
-            eq_series = df[df["Category"] == "NON-SSOE"]["EquipmentType"]
-            eq_list = sorted([x for x in eq_series.dropna().unique() if x])
-
-        else:
-            eq_series = df["EquipmentType"]
-            eq_list = sorted([x for x in eq_series.dropna().unique() if x])
-
-        eq = st.selectbox("Equipment", ["All"] + eq_list)
+    elif category == "NON-SSOE":
+        eq_list = sorted(df[df["Category"] == "NON-SSOE"]["EquipmentType"].dropna().unique())
 
     else:
-        eq = "All"
+        eq_list = sorted(df["EquipmentType"].dropna().unique())
+
+    eq = st.selectbox("Equipment", ["All"] + list(eq_list))
 
 # ==================================================
 # APPLY FILTERS
@@ -189,26 +192,10 @@ def render_table(df):
 
     html += "</tr></thead><tbody>"
 
-    today = pd.to_datetime("today")
-
     for _, row in df.iterrows():
         html += "<tr>"
-        for col, val in row.items():
-
-            style = ""
-
-            if col in ["EndDate", "Expiry Date"] and pd.notna(val):
-                try:
-                    date_val = pd.to_datetime(val)
-                    if date_val < today:
-                        style = "background-color:#f8d7da;"
-                    elif date_val <= today + pd.Timedelta(days=30):
-                        style = "background-color:#fff3cd;"
-                except:
-                    pass
-
-            html += f"<td style='{style}'>{'' if pd.isna(val) else val}</td>"
-
+        for val in row:
+            html += f"<td>{'' if pd.isna(val) else val}</td>"
         html += "</tr>"
 
     html += "</tbody></table>"
@@ -218,28 +205,27 @@ def render_table(df):
 # ==================================================
 # TABS
 # ==================================================
-tab1, tab2 = st.tabs(["📋 Full Inventory", "⏳ Expiry Tracking"])
+tab1, tab2 = st.tabs(["📋 Full Inventory", "📊 Equipment Summary"])
 
+# -------------------------------
+# TAB 1 - INVENTORY
+# -------------------------------
 with tab1:
     st.subheader("📋 Inventory Data")
     st.markdown(render_table(filtered_df), unsafe_allow_html=True)
 
+# -------------------------------
+# TAB 2 - SUMMARY (FIXED)
+# -------------------------------
 with tab2:
-    st.subheader("⏳ Expiry Tracking")
+    st.subheader("📊 Equipment Summary")
 
-    if "BrandModel" in filtered_df.columns and "EndDate" in filtered_df.columns:
+    summary_df = (
+        filtered_df
+        .groupby("BrandModel")
+        .size()
+        .reset_index(name="Count")
+        .sort_values(by="Count", ascending=False)
+    )
 
-        expiry_df = (
-            filtered_df
-            .groupby(["BrandModel", "EndDate"])
-            .size()
-            .reset_index(name="Count")
-            .rename(columns={"EndDate": "Expiry Date"})
-        )
-
-        expiry_df = expiry_df.sort_values(by="Expiry Date", ascending=True)
-
-        st.markdown(render_table(expiry_df), unsafe_allow_html=True)
-
-    else:
-        st.warning("Expiry data not available.")
+    st.markdown(render_table(summary_df), unsafe_allow_html=True)

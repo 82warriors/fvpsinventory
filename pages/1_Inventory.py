@@ -218,14 +218,23 @@ with tab1:
 # TAB 2 - SUMMARY (FIXED)
 # -------------------------------
 with tab2:
-    st.subheader("📊 Equipment Summary")
+    st.subheader("⏳ Expiry Tracking")
 
-    summary_df = (
+    expiry_df = (
         filtered_df
+        .dropna(subset=["BrandModel"])
         .groupby("BrandModel")
-        .size()
-        .reset_index(name="Count")
-        .sort_values(by="Count", ascending=False)
+        .agg({
+            "EndDate": "min",   # 👈 earliest expiry
+            "BrandModel": "count"
+        })
+        .rename(columns={
+            "EndDate": "Expiry Date",
+            "BrandModel": "Count"
+        })
+        .reset_index()
     )
 
-    st.markdown(render_table(summary_df), unsafe_allow_html=True)
+    expiry_df = expiry_df.sort_values(by="Expiry Date", ascending=True)
+
+    st.markdown(render_table(expiry_df), unsafe_allow_html=True)

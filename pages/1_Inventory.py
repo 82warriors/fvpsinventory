@@ -39,9 +39,7 @@ def load_data(gid, sheet_name, header_row):
         df.columns = df.columns.astype(str).str.strip()
         df = df.loc[:, ~df.columns.str.contains("^Unnamed", na=False)]
 
-        # ==================================================
-        # FIX LOCATION FORMAT (2 DIGITS)
-        # ==================================================
+        # Fix Location (01, 02, etc.)
         if "Location" in df.columns:
             df["Location"] = df["Location"].apply(
                 lambda x: str(int(float(x))).zfill(2)
@@ -49,9 +47,7 @@ def load_data(gid, sheet_name, header_row):
                 else x
             )
 
-        # ==================================================
-        # CLEAN EQUIPMENT TYPE
-        # ==================================================
+        # Clean EquipmentType
         if "EquipmentType" in df.columns:
             df["EquipmentType"] = (
                 df["EquipmentType"]
@@ -89,7 +85,14 @@ lvl6 = load_data("1046028540", "Level 6", header_row=3)
 others = load_data("1253302028", "Others", header_row=2)
 
 df = pd.concat([ssoe, lvl1, lvl2, lvl3, lvl4, lvl6, others], ignore_index=True)
-df = df.dropna(how="all")
+
+# ==================================================
+# 🔥 REMOVE EMPTY ROWS (KEY FIX)
+# ==================================================
+df = df[
+    df["BrandModel"].notna() &
+    df["EquipmentType"].notna()
+]
 
 # ==================================================
 # FILTERS

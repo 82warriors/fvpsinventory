@@ -38,12 +38,14 @@ def load_data(gid, sheet_name, header_row):
         df.columns = df.columns.astype(str).str.strip()
         df = df.loc[:, ~df.columns.str.contains("^Unnamed", na=False)]
 
+        # Normalize EquipmentType
         if "EquipmentType" in df.columns:
             df["EquipmentType"] = (
                 df["EquipmentType"]
                 .astype(str)
                 .str.strip()
-                .replace({"nan": None, "None": None, "": None})
+                .str.title()
+                .replace({"Nan": None, "None": None, "": None})
             )
 
         df["Category"] = "SSOE" if sheet_name == "SSOE" else "NON-SSOE"
@@ -86,15 +88,20 @@ with col1:
 
 with col2:
     if "EquipmentType" in df.columns:
-        if category == "All":
-            eq_series = df["EquipmentType"]
-        elif category == "SSOE":
-            eq_series = df[df["Category"] == "SSOE"]["EquipmentType"]
-        else:
-            eq_series = df[df["Category"] == "NON-SSOE"]["EquipmentType"]
 
-        eq_list = sorted([x for x in eq_series.dropna().unique() if x])
+        if category == "SSOE":
+            eq_list = ["Printer", "Notebook", "Mobile Devices", "Others", "Wog"]
+
+        elif category == "NON-SSOE":
+            eq_series = df[df["Category"] == "NON-SSOE"]["EquipmentType"]
+            eq_list = sorted([x for x in eq_series.dropna().unique() if x])
+
+        else:
+            eq_series = df["EquipmentType"]
+            eq_list = sorted([x for x in eq_series.dropna().unique() if x])
+
         eq = st.selectbox("Equipment", ["All"] + eq_list)
+
     else:
         eq = "All"
 
@@ -120,7 +127,7 @@ c2.metric("SSOE", len(filtered_df[filtered_df["Category"] == "SSOE"]))
 c3.metric("NON-SSOE", len(filtered_df[filtered_df["Category"] == "NON-SSOE"]))
 
 # ==================================================
-# 🎨 HTML TABLE RENDER (GREEN HEADER)
+# 🎨 HTML TABLE RENDER
 # ==================================================
 def render_table(df):
     html = """
@@ -175,7 +182,7 @@ def render_table(df):
     return html
 
 # ==================================================
-# DISPLAY (FIXED)
+# DISPLAY
 # ==================================================
 st.subheader("📋 Inventory Data")
 

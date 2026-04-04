@@ -28,12 +28,16 @@ df = load_data()
 # =========================
 # KPI
 # =========================
-st.markdown("### 📊 Overview")
+# Ensure DATE is datetime
+df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
 
-# Safe column handling
-admin_total = df.get("ADMIN INSTALLED", pd.Series(dtype=float)).sum()
-acad_total = df.get("ACAD INSTALLED", pd.Series(dtype=float)).sum()
+# Get latest row
+latest_row = df.sort_values("DATE", ascending=False).iloc[0]
 
+admin_total = latest_row.get("ADMIN INSTALLED", 0)
+acad_total = latest_row.get("ACAD INSTALLED", 0)
+
+# Display
 col1, col2 = st.columns(2)
 
 col1.metric("Total Admin Devices", int(admin_total))

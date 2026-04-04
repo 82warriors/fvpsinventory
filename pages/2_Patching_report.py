@@ -1,8 +1,19 @@
 import streamlit as st
 import pandas as pd
 
+#====================================
+# PAGE REFRESH
+#=====================================
+# Refresh button
 if st.button("🔄 Refresh Data"):
     st.cache_data.clear()
+
+@st.cache_data(ttl=120)
+def load_data():
+    df = pd.read_csv(URL, header=1)
+    df.columns = df.columns.str.strip()
+    df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
+    return df
 
 # ==================================================
 # PAGE CONFIG

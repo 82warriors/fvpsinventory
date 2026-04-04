@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import html   # ✅ IMPORTANT (fix for broken HTML)
 
 # ==================================================
 # PAGE CONFIG
@@ -66,12 +67,10 @@ def load_data(gid, sheet_name, header_row):
                 .replace({"NAN": None, "NONE": None, "": None})
             )
 
-        # Convert EndDate properly
+        # ✅ Convert + format EndDate
         if "EndDate" in df.columns:
             df["EndDate"] = pd.to_datetime(df["EndDate"], errors="coerce")
-
-        # Format EndDate → 05 March 2023
-            df["EndDate"] = df["EndDate"].dt.strftime("%d %B %Y")
+            df["EndDate_Display"] = df["EndDate"].dt.strftime("%d %B %Y")
 
         # Force Category
         df["Category"] = "SSOE" if sheet_name == "SSOE" else "NON-SSOE"
@@ -81,7 +80,7 @@ def load_data(gid, sheet_name, header_row):
             if col not in df.columns:
                 df[col] = None
 
-        return df[MASTER_COLUMNS]
+        return df
 
     except Exception as e:
         st.error(f"Error loading {sheet_name}: {e}")
@@ -150,10 +149,10 @@ c2.metric("SSOE", len(filtered_df[filtered_df["Category"] == "SSOE"]))
 c3.metric("NON-SSOE", len(filtered_df[filtered_df["Category"] == "NON-SSOE"]))
 
 # ==================================================
-# TABLE RENDER (WITH EXPIRY HIGHLIGHT)
+# TABLE RENDER (SAFE HTML + EXPIRY)
 # ==================================================
 def render_table(df):
-    html = """
+    html_table = """
     <style>
     .custom-table {
         width: 100%;
@@ -176,17 +175,8 @@ def render_table(df):
         text-align: center;
     }
 
-    .custom-table tr:nth-child(even) {
-        background-color: #f4f4f4;
-    }
-
-    .expired {
-        background-color: #f8d7da;
-    }
-
-    .warning {
-        background-color: #fff3cd;
-    }
+    .expired { background-color: #f8d7da; }
+    .warning { background-color: #fff3cd; }
     </style>
 
     <table class="custom-table">
@@ -194,14 +184,14 @@ def render_table(df):
     """
 
     for col in df.columns:
-        html += f"<th>{col}</th>"
+        html_table += f"<th>{html.escape(str(col))}</th>"
 
-    html += "</tr></thead><tbody>"
+    html_table += "</tr></thead><tbody>"
 
     today = pd.Timestamp.today()
 
     for _, row in df.iterrows():
-        html += "<tr>"
+        html_table += "<tr>"
 
         for col, val in row.items():
             cell_class = ""
@@ -209,7 +199,6 @@ def render_table(df):
             if col in ["EndDate", "Expiry Date"] and pd.notna(val):
                 try:
                     date_val = pd.to_datetime(val)
-
                     if date_val < today:
                         cell_class = "expired"
                     elif date_val <= today + pd.Timedelta(days=30):
@@ -217,35 +206,30 @@ def render_table(df):
                 except:
                     pass
 
-            display_val = "" if pd.isna(val) else val
-   
+            safe_val = "" if pd.isna(val) else html.escape(str(val))  # ✅ FIX
+            html_table += f"<td class='{cell_class}'>{safe_val}</td>"
 
-        html += "</tr>"
+        html_table += "</tr>"
 
-    html += "</tbody></table>"
-    return html
+    html_table += "</tbody></table>"
+    return html_table
 
 # ==================================================
 # TABS
 # ==================================================
 tab1, tab2 = st.tabs(["📋 Full Inventory", "⏳ Equipment Expiry"])
 
-# -------------------------------
 # TAB 1
-# -------------------------------
 with tab1:
     st.subheader("📋 Inventory Data")
     st.markdown(render_table(filtered_df), unsafe_allow_html=True)
 
-# -------------------------------
 # TAB 2
-# -------------------------------
 with tab2:
     st.subheader("⏳ Expiry Tracking")
 
     expiry_df = (
         filtered_df
-        .dropna(subset=["BrandModel"])
         .groupby("BrandModel")
         .agg({
             "EndDate": "min",

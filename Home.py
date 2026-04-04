@@ -1,47 +1,54 @@
 import streamlit as st
+import pandas as pd
 
-st.set_page_config(page_title="FVPS IT System", layout="wide")
+st.set_page_config(page_title="FVPS Dashboard", layout="wide")
 
-st.title("🏫 FVPS IT Inventory & Patching System")
+st.title("📊 FVPS Inventory Dashboard")
 
-st.markdown("""
-Welcome to the **FVPS IT Management Dashboard**.
+# =========================
+# LOAD DATA
+# =========================
+@st.cache_data(ttl=120)
+def load_inventory():
+    url = "https://docs.google.com/spreadsheets/d/1lmCotLUgTLJBKska2y7od2LTPT_qooIFS0_zyVnRI0A/export?format=csv"
+    df = pd.read_csv(url)
 
-This system provides a centralized platform to manage and monitor:
+    df.columns = df.columns.str.strip()
+    return df
 
-### 📦 Inventory
-- View all IT equipment across levels
-- Filter by location, equipment type, and room
-- Track asset details (Serial No, Asset No, Custodian)
+df = load_inventory()
 
-### 📊 Dashboard
-- Overview of total devices
-- Active vs faulty devices
-- Patching trends and statistics
+# =========================
+# KPI SECTION
+# =========================
+st.markdown("## 📊 Key Metrics")
 
-### 🛠 Patching Report
-- Weekly patching updates
-- Historical tracking
-- Status breakdown (Installed, Not Connected, etc.)
+today = pd.Timestamp.today()
 
----
+df["EndDate"] = pd.to_datetime(df["EndDate"], errors="coerce")
 
-### 🚀 How to Use
-Use the **sidebar** to navigate between:
-- 📦 Inventory  
-- 📊 Dashboard  
-- 🛠 Patching Report  
+expired = df[df["EndDate"] < today]
+expiring = df[df["EndDate"] <= today + pd.Timedelta(days=30)]
 
----
+c1, c2, c3, c4 = st.columns(4)
 
-### 🎯 Purpose
-This system helps:
-- Improve visibility of IT assets  
-- Track patching compliance  
-- Support decision-making for maintenance and upgrades  
+c1.metric("Total Devices", len(df))
+c2.metric("Expired", len(expired))
+c3.metric("Expiring Soon", len(expiring))
+c4.metric("Unique Models", df["BrandModel"].nunique())
 
----
+# =========================
+# CHART
+# =========================
+st.markdown("## 📈 Equipment Distribution")
 
-### 👨‍💻 Maintained by
-FVPS IT Team
-""")
+chart_df = df["EquipmentType"].value_counts().reset_index()
+chart_df.columns = ["EquipmentType", "Count"]
+
+st.bar_chart(chart_df.set_index("EquipmentType"))
+
+# =========================
+# ALERT
+# =========================
+if len(expiring) > 0:
+    st.warning(f"⚠️ {len(expiring)} devices expiring within 30 days")

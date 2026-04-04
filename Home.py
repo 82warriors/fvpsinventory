@@ -6,46 +6,72 @@ import pandas as pd
 # ==================================================
 st.set_page_config(page_title="FVPS Dashboard", layout="wide")
 
-st.title("📊 FVPS Inventory Dashboard")
+# ==================================================
+# 🎨 UI STYLING
+# ==================================================
+st.markdown("""
+<style>
+.main {background-color: #f5f7fa;}
+
+.kpi-card {
+    background: white;
+    padding: 18px;
+    border-radius: 12px;
+    box-shadow: 0px 2px 8px rgba(0,0,0,0.05);
+    text-align: center;
+}
+
+.kpi-title {
+    font-size: 14px;
+    color: gray;
+}
+
+.kpi-value {
+    font-size: 30px;
+    font-weight: bold;
+    color: #2e7d32;
+}
+
+.section {
+    margin-top: 25px;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ==================================================
-# LOAD DATA (ROBUST)
+# TITLE
+# ==================================================
+st.title("📊 FVPS Dashboard")
+
+# ==================================================
+# LOAD DATA
 # ==================================================
 @st.cache_data(ttl=120)
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/1lmCotLUgTLJBKska2y7od2LTPT_qooIFS0_zyVnRI0A/export?format=csv"
 
     df = pd.read_csv(url)
-    df.columns = df.columns.astype(str).str.strip()
+    df.columns = df.columns.str.strip()
 
-    # Fix header row if needed
+    # Fix header issue
     if "BrandModel" not in df.columns:
         df = pd.read_csv(url, header=3)
-        df.columns = df.columns.astype(str).str.strip()
+        df.columns = df.columns.str.strip()
 
-    # Final check
-    if "BrandModel" not in df.columns:
-        st.error("❌ Unable to detect correct header row.")
-        st.write("Detected columns:", df.columns.tolist())
-        st.stop()
-
-    # Normalize column names
+    # Normalize
     df = df.rename(columns={
         "Brand Model": "BrandModel",
         "Equipment Type": "EquipmentType",
-        "Start Date": "StartDate",
         "End Date": "EndDate"
     })
 
-    # Clean data
+    # Clean
     df["BrandModel"] = df["BrandModel"].astype(str).str.upper().str.strip()
 
     if "EquipmentType" in df.columns:
-        df["EquipmentType"] = df["EquipmentType"].astype(str).str.title().str.strip()
+        df["EquipmentType"] = df["EquipmentType"].astype(str).str.title()
 
-    # Dates
-    if "EndDate" in df.columns:
-        df["EndDate"] = pd.to_datetime(df["EndDate"], errors="coerce")
+    df["EndDate"] = pd.to_datetime(df.get("EndDate"), errors="coerce")
 
     return df
 
@@ -53,89 +79,113 @@ def load_data():
 df = load_data()
 
 # ==================================================
-# KPI SECTION
+# KPI CALCULATIONS
 # ==================================================
-st.markdown("## 📊 Key Metrics")
-
 today = pd.Timestamp.today()
 
 expired = df[df["EndDate"] < today]
-expiring_30 = df[df["EndDate"] <= today + pd.Timedelta(days=30)]
+expiring = df[df["EndDate"] <= today + pd.Timedelta(days=30)]
 
-col1, col2, col3, col4 = st.columns(4)
+total_devices = len(df)
+expired_count = len(expired)
+expiring_count = len(expiring)
+unique_models = df["BrandModel"].nunique()
 
-col1.metric("Total Devices", len(df))
-col2.metric("Expired", len(expired))
-col3.metric("Expiring (30 Days)", len(expiring_30))
-col4.metric("Unique Models", df["BrandModel"].nunique())
+# ==================================================
+# KPI SECTION
+# ==================================================
+st.markdown("## 📊 Overview")
+
+c1, c2, c3, c4 = st.columns(4)
+
+c1.markdown(f"""
+<div class="kpi-card">
+    <div class="kpi-title">Total Devices</div>
+    <div class="kpi-value">{total_devices}</div>
+</div>
+""", unsafe_allow_html=True)
+
+c2.markdown(f"""
+<div class="kpi-card">
+    <div class="kpi-title">Expired</div>
+    <div class="kpi-value">{expired_count}</div>
+</div>
+""", unsafe_allow_html=True)
+
+c3.markdown(f"""
+<div class="kpi-card">
+    <div class="kpi-title">Expiring (30 Days)</div>
+    <div class="kpi-value">{expiring_count}</div>
+</div>
+""", unsafe_allow_html=True)
+
+c4.markdown(f"""
+<div class="kpi-card">
+    <div class="kpi-title">Unique Models</div>
+    <div class="kpi-value">{unique_models}</div>
+</div>
+""", unsafe_allow_html=True)
 
 # ==================================================
 # ALERT
 # ==================================================
-if len(expiring_30) > 0:
-    st.warning(f"⚠️ {len(expiring_30)} devices are expiring within 30 days")
+if expiring_count > 0:
+    st.warning(f"⚠️ {expiring_count} devices expiring within 30 days")
 
 # ==================================================
-# CHARTS SECTION
+# CHARTS
 # ==================================================
+st.markdown('<div class="section">', unsafe_allow_html=True)
 st.markdown("## 📈 Insights")
 
-colA, colB = st.columns(2)
+col1, col2 = st.columns(2)
 
 # Equipment Distribution
-with colA:
+with col1:
     st.markdown("### Equipment Distribution")
 
     if "EquipmentType" in df.columns:
-        eq_chart = (
-            df["EquipmentType"]
-            .value_counts()
-            .reset_index()
-        )
-        eq_chart.columns = ["EquipmentType", "Count"]
-
-        st.bar_chart(eq_chart.set_index("EquipmentType"))
+        eq_chart = df["EquipmentType"].value_counts()
+        st.bar_chart(eq_chart)
 
 # Expiry Trend
-with colB:
+with col2:
     st.markdown("### Expiry Timeline")
 
     expiry_chart = (
         df.dropna(subset=["EndDate"])
         .groupby(df["EndDate"].dt.to_period("M"))
         .size()
-        .reset_index(name="Count")
     )
 
-    expiry_chart["EndDate"] = expiry_chart["EndDate"].astype(str)
+    expiry_chart.index = expiry_chart.index.astype(str)
 
-    st.line_chart(expiry_chart.set_index("EndDate"))
+    st.line_chart(expiry_chart)
+
+st.markdown('</div>', unsafe_allow_html=True)
 
 # ==================================================
-# TOP MODELS TABLE
+# TOP MODELS
 # ==================================================
+st.markdown('<div class="section">', unsafe_allow_html=True)
 st.markdown("## 🏆 Top Equipment Models")
 
-top_models = (
-    df["BrandModel"]
-    .value_counts()
-    .reset_index()
-    .head(10)
-)
-
-top_models.columns = ["BrandModel", "Count"]
-
+top_models = df["BrandModel"].value_counts().head(10)
 st.dataframe(top_models, use_container_width=True)
 
+st.markdown('</div>', unsafe_allow_html=True)
+
 # ==================================================
-# RECENTLY UPDATED
+# RECENT UPDATES
 # ==================================================
 if "Last Updated" in df.columns:
+    st.markdown('<div class="section">', unsafe_allow_html=True)
     st.markdown("## 🕒 Recently Updated")
 
-    recent = df.copy()
-    recent["Last Updated"] = pd.to_datetime(recent["Last Updated"], errors="coerce")
+    df["Last Updated"] = pd.to_datetime(df["Last Updated"], errors="coerce")
 
-    recent = recent.sort_values(by="Last Updated", ascending=False).head(10)
+    recent = df.sort_values("Last Updated", ascending=False).head(10)
 
     st.dataframe(recent, use_container_width=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)

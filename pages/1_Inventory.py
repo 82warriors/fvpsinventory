@@ -35,11 +35,10 @@ def load_data(gid, sheet_name, header_row):
     try:
         df = pd.read_csv(BASE_URL + gid, header=header_row)
 
-        # Clean headers
         df.columns = df.columns.astype(str).str.strip()
         df = df.loc[:, ~df.columns.str.contains("^Unnamed", na=False)]
 
-        # Fix Location
+        # Fix Location → 01, 02
         if "Location" in df.columns:
             df["Location"] = df["Location"].apply(
                 lambda x: str(int(float(x))).zfill(2)
@@ -57,7 +56,7 @@ def load_data(gid, sheet_name, header_row):
                 .replace({"Nan": None, "None": None, "": None})
             )
 
-        # 🔥 Clean BrandModel (IMPORTANT FIX)
+        # Clean BrandModel
         if "BrandModel" in df.columns:
             df["BrandModel"] = (
                 df["BrandModel"]
@@ -66,6 +65,10 @@ def load_data(gid, sheet_name, header_row):
                 .str.upper()
                 .replace({"NAN": None, "NONE": None, "": None})
             )
+
+        # Convert EndDate properly
+        if "EndDate" in df.columns:
+            df["EndDate"] = pd.to_datetime(df["EndDate"], errors="coerce")
 
         # Force Category
         df["Category"] = "SSOE" if sheet_name == "SSOE" else "NON-SSOE"
@@ -96,9 +99,7 @@ others = load_data("1253302028", "Others", 2)
 
 df = pd.concat([ssoe, lvl1, lvl2, lvl3, lvl4, lvl6, others], ignore_index=True)
 
-# ==================================================
-# REMOVE EMPTY ROWS
-# ==================================================
+# Remove empty rows
 df = df[
     df["BrandModel"].notna() &
     df["EquipmentType"].notna()
@@ -117,10 +118,8 @@ with col1:
 with col2:
     if category == "SSOE":
         eq_list = ["Printer", "Notebook", "Mobile Devices", "Others", "Wog"]
-
     elif category == "NON-SSOE":
         eq_list = sorted(df[df["Category"] == "NON-SSOE"]["EquipmentType"].dropna().unique())
-
     else:
         eq_list = sorted(df["EquipmentType"].dropna().unique())
 
@@ -148,7 +147,7 @@ c2.metric("SSOE", len(filtered_df[filtered_df["Category"] == "SSOE"]))
 c3.metric("NON-SSOE", len(filtered_df[filtered_df["Category"] == "NON-SSOE"]))
 
 # ==================================================
-# TABLE RENDER
+# TABLE RENDER (WITH EXPIRY HIGHLIGHT)
 # ==================================================
 def render_table(df):
     html = """
@@ -178,8 +177,12 @@ def render_table(df):
         background-color: #f4f4f4;
     }
 
-    .custom-table tr:hover {
-        background-color: #e8f5e9;
+    .expired {
+        background-color: #f8d7da;
+    }
+
+    .warning {
+        background-color: #fff3cd;
     }
     </style>
 
@@ -192,30 +195,47 @@ def render_table(df):
 
     html += "</tr></thead><tbody>"
 
+    today = pd.Timestamp.today()
+
     for _, row in df.iterrows():
         html += "<tr>"
-        for val in row:
-            html += f"<td>{'' if pd.isna(val) else val}</td>"
+
+        for col, val in row.items():
+            cell_class = ""
+
+            if col in ["EndDate", "Expiry Date"] and pd.notna(val):
+                try:
+                    date_val = pd.to_datetime(val)
+
+                    if date_val < today:
+                        cell_class = "expired"
+                    elif date_val <= today + pd.Timedelta(days=30):
+                        cell_class = "warning"
+                except:
+                    pass
+
+            display_val = "" if pd.isna(val) else val
+            html += f"<td class='{cell_class}'>{display_val}</td>"
+
         html += "</tr>"
 
     html += "</tbody></table>"
-
     return html
 
 # ==================================================
 # TABS
 # ==================================================
-tab1, tab2 = st.tabs(["📋 Full Inventory", "📊 Equipment Expiry])
+tab1, tab2 = st.tabs(["📋 Full Inventory", "⏳ Equipment Expiry"])
 
 # -------------------------------
-# TAB 1 - INVENTORY
+# TAB 1
 # -------------------------------
 with tab1:
     st.subheader("📋 Inventory Data")
     st.markdown(render_table(filtered_df), unsafe_allow_html=True)
 
 # -------------------------------
-# TAB 2 - SUMMARY (FIXED)
+# TAB 2
 # -------------------------------
 with tab2:
     st.subheader("⏳ Expiry Tracking")
@@ -225,7 +245,7 @@ with tab2:
         .dropna(subset=["BrandModel"])
         .groupby("BrandModel")
         .agg({
-            "EndDate": "min",   # 👈 earliest expiry
+            "EndDate": "min",
             "BrandModel": "count"
         })
         .rename(columns={
@@ -233,8 +253,7 @@ with tab2:
             "BrandModel": "Count"
         })
         .reset_index()
+        .sort_values(by="Expiry Date", ascending=True)
     )
-
-    expiry_df = expiry_df.sort_values(by="Expiry Date", ascending=True)
 
     st.markdown(render_table(expiry_df), unsafe_allow_html=True)

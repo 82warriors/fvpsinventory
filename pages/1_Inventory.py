@@ -70,6 +70,9 @@ def load_data(gid, sheet_name, header_row):
         if "EndDate" in df.columns:
             df["EndDate"] = pd.to_datetime(df["EndDate"], errors="coerce")
 
+        # Format EndDate → 05 March 2023
+            df["EndDate"] = df["EndDate"].dt.strftime("%d %B %Y")
+
         # Force Category
         df["Category"] = "SSOE" if sheet_name == "SSOE" else "NON-SSOE"
 

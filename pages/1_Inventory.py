@@ -238,22 +238,16 @@ with tab1:
     display_df = filtered_df.drop(columns=["EndDate_Display"], errors="ignore")
     st.markdown(render_table(display_df), unsafe_allow_html=True)
 
-# TAB 2
 with tab2:
     st.subheader("⏳ Expiry Tracking")
 
     expiry_df = (
         filtered_df
-        .groupby("BrandModel")
-        .agg({
-            "EndDate": "min",
-            "BrandModel": "count"
-        })
-        .rename(columns={
-            "EndDate": "Expiry Date",
-            "BrandModel": "Count"
-        })
-        .reset_index()
+        .dropna(subset=["BrandModel"])
+        .groupby(["BrandModel", "EndDate"])   # 🔥 FIX HERE
+        .size()
+        .reset_index(name="Count")
+        .rename(columns={"EndDate": "Expiry Date"})
         .sort_values(by="Expiry Date", ascending=True)
     )
 

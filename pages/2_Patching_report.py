@@ -14,7 +14,7 @@ st.title("🛠 Patching Report")
 URL = "https://docs.google.com/spreadsheets/d/1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE/export?format=csv"
 
 # ==================================================
-# LOAD DATA (ROBUST)
+# LOAD DATA (CLEAN + STABLE)
 # ==================================================
 @st.cache_data(ttl=120)
 def load_data():
@@ -26,19 +26,19 @@ def load_data():
     # -------------------------
     # FIX DATE
     # -------------------------
-    if "DATE" in df.columns:
-        df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
-        df = df[df["DATE"].notna()]
+    df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
+    df = df[df["DATE"].notna()]  # remove bad rows
 
     # -------------------------
     # NUMERIC CLEAN
     # -------------------------
-    num_cols = df.columns.drop("DATE", errors="ignore")
+    for col in df.columns:
+        if col != "DATE":
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-    for col in num_cols:
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
-
-    # Sort latest first
+    # -------------------------
+    # SORT (LATEST FIRST)
+    # -------------------------
     df = df.sort_values("DATE", ascending=False)
 
     return df
@@ -49,65 +49,41 @@ df = load_data()
 # ==================================================
 # REFRESH BUTTON
 # ==================================================
-if st.button("🔄 Refresh Data"):
-    st.cache_data.clear()
-    st.rerun()
+col_btn, _ = st.columns([1, 5])
+with col_btn:
+    if st.button("🔄 Refresh"):
+        st.cache_data.clear()
+        st.rerun()
 
 # ==================================================
-# KPI (LATEST WEEK)
+# KPI SECTION (LATEST WEEK ONLY)
 # ==================================================
 st.markdown("## 📊 Overview")
 
-if len(df) > 0:
-    latest = df.iloc[0]
+latest = df.iloc[0]
 
-    admin = latest.get("ADMIN INSTALLED", 0)
-    acad = latest.get("ACAD INSTALLED", 0)
+admin = int(latest.get("ADMIN INSTALLED", 0))
+acad = int(latest.get("ACAD INSTALLED", 0))
 
-    # Patching % formula
-    total_base = (
-        latest.get("ADMIN SCCM EPP > 4 wks", 0) +
-        latest.get("ACAD SCCM EPP > 4 wks", 0) +
-        latest.get("ADMIN NOT CONNECTED", 0) +
-        latest.get("ACAD NOT CONNECTED", 0) +
-        latest.get("ADMIN REQUIRED", 0) +
-        latest.get("ACAD REQUIRED", 0) +
-        latest.get("ADMIN UNKNOWN", 0) +
-        latest.get("ACAD UNKNOWN", 0) +
-        latest.get("E-EXAM", 0) +
-        latest.get("FAULTY", 0)
-    )
+col1, col2 = st.columns(2)
 
-    installed = admin + acad
-
-    patching_pct = (installed / total_base * 100) if total_base > 0 else 0
-
-else:
-    admin = acad = patching_pct = 0
-
-col1, col2, col3 = st.columns(3)
-
-col1.metric("Admin Devices", int(admin))
-col2.metric("Acad Devices", int(acad))
-col3.metric("Patching %", f"{patching_pct:.1f}%")
+col1.metric("Total Admin Devices", admin)
+col2.metric("Total Acad Devices", acad)
 
 # ==================================================
-# WEEKLY TREND
+# TREND CHART
 # ==================================================
 st.markdown("## 📈 Weekly Trend")
 
 trend_df = df.copy()
-
 trend_df["Week"] = trend_df["DATE"].dt.strftime("%d %b")
 
-trend_df["Total Installed"] = (
-    trend_df.get("ADMIN INSTALLED", 0) +
-    trend_df.get("ACAD INSTALLED", 0)
+trend_df["Total"] = (
+    trend_df["ADMIN INSTALLED"] +
+    trend_df["ACAD INSTALLED"]
 )
 
-st.line_chart(
-    trend_df.set_index("Week")["Total Installed"]
-)
+st.line_chart(trend_df.set_index("Week")["Total"])
 
 # ==================================================
 # DOWNLOAD
@@ -122,7 +98,7 @@ st.download_button(
 )
 
 # ==================================================
-# TABLE DISPLAY
+# DISPLAY TABLE (CLEAN)
 # ==================================================
 st.markdown("## 📋 Raw Data")
 
@@ -134,5 +110,6 @@ display_df["DATE"] = display_df["DATE"].dt.strftime("%d %B %Y")
 st.dataframe(
     display_df,
     use_container_width=True,
-    height=600
+    height=600,
+    hide_index=True  # ✅ THIS FIXES YOUR ISSUE
 )

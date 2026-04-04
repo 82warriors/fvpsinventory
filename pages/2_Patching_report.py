@@ -14,7 +14,7 @@ st.title("🛠 Patching Report")
 URL = "https://docs.google.com/spreadsheets/d/1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE/export?format=csv"
 
 # ==================================================
-# LOAD DATA (FIXED)
+# LOAD DATA (ROBUST)
 # ==================================================
 @st.cache_data(ttl=120)
 def load_data():
@@ -23,27 +23,28 @@ def load_data():
     df.columns = df.columns.str.strip()
     df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
 
-    # ==================================================
-    # 🔥 FIX DATE COLUMN
-    # ==================================================
+    # -------------------------
+    # FIX DATE
+    # -------------------------
     if "DATE" in df.columns:
         df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
-
-        # Remove invalid rows
         df = df[df["DATE"].notna()]
 
-        # Format display
-        df["DATE_DISPLAY"] = df["DATE"].dt.strftime("%d %B %Y")
+    # -------------------------
+    # NUMERIC CLEAN
+    # -------------------------
+    num_cols = df.columns.drop("DATE", errors="ignore")
+
+    for col in num_cols:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+    # Sort latest first
+    df = df.sort_values("DATE", ascending=False)
 
     return df
 
-df = load_data()
 
-# ==================================================
-# SORT LATEST FIRST
-# ==================================================
-if "DATE" in df.columns:
-    df = df.sort_values("DATE", ascending=False)
+df = load_data()
 
 # ==================================================
 # REFRESH BUTTON
@@ -53,27 +54,63 @@ if st.button("🔄 Refresh Data"):
     st.rerun()
 
 # ==================================================
-# KPI (LATEST WEEK ONLY)
+# KPI (LATEST WEEK)
 # ==================================================
-st.subheader("📊 Overview")
+st.markdown("## 📊 Overview")
 
-if "DATE" in df.columns:
-    latest_row = df.iloc[0]
+if len(df) > 0:
+    latest = df.iloc[0]
 
-    admin_total = latest_row.get("ADMIN INSTALLED", 0)
-    acad_total = latest_row.get("ACAD INSTALLED", 0)
+    admin = latest.get("ADMIN INSTALLED", 0)
+    acad = latest.get("ACAD INSTALLED", 0)
+
+    # Patching % formula
+    total_base = (
+        latest.get("ADMIN SCCM EPP > 4 wks", 0) +
+        latest.get("ACAD SCCM EPP > 4 wks", 0) +
+        latest.get("ADMIN NOT CONNECTED", 0) +
+        latest.get("ACAD NOT CONNECTED", 0) +
+        latest.get("ADMIN REQUIRED", 0) +
+        latest.get("ACAD REQUIRED", 0) +
+        latest.get("ADMIN UNKNOWN", 0) +
+        latest.get("ACAD UNKNOWN", 0) +
+        latest.get("E-EXAM", 0) +
+        latest.get("FAULTY", 0)
+    )
+
+    installed = admin + acad
+
+    patching_pct = (installed / total_base * 100) if total_base > 0 else 0
 
 else:
-    admin_total = 0
-    acad_total = 0
+    admin = acad = patching_pct = 0
 
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 
-col1.metric("Total Admin Devices", int(admin_total))
-col2.metric("Total Acad Devices", int(acad_total))
+col1.metric("Admin Devices", int(admin))
+col2.metric("Acad Devices", int(acad))
+col3.metric("Patching %", f"{patching_pct:.1f}%")
 
 # ==================================================
-# DOWNLOAD BUTTON
+# WEEKLY TREND
+# ==================================================
+st.markdown("## 📈 Weekly Trend")
+
+trend_df = df.copy()
+
+trend_df["Week"] = trend_df["DATE"].dt.strftime("%d %b")
+
+trend_df["Total Installed"] = (
+    trend_df.get("ADMIN INSTALLED", 0) +
+    trend_df.get("ACAD INSTALLED", 0)
+)
+
+st.line_chart(
+    trend_df.set_index("Week")["Total Installed"]
+)
+
+# ==================================================
+# DOWNLOAD
 # ==================================================
 csv = df.to_csv(index=False).encode("utf-8")
 
@@ -85,16 +122,14 @@ st.download_button(
 )
 
 # ==================================================
-# DISPLAY TABLE (CLEAN DATE)
+# TABLE DISPLAY
 # ==================================================
-st.subheader("📋 Raw Data")
+st.markdown("## 📋 Raw Data")
 
 display_df = df.copy()
 
-# Replace DATE with formatted version
-if "DATE_DISPLAY" in display_df.columns:
-    display_df["DATE"] = display_df["DATE_DISPLAY"]
-    display_df = display_df.drop(columns=["DATE_DISPLAY"])
+# Format DATE nicely
+display_df["DATE"] = display_df["DATE"].dt.strftime("%d %B %Y")
 
 st.dataframe(
     display_df,

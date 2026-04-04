@@ -15,25 +15,38 @@ st.title("📊 FVPS Dashboard")
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/1lmCotLUgTLJBKska2y7od2LTPT_qooIFS0_zyVnRI0A/export?format=csv"
 
-    # Try default
-    df = pd.read_csv(url)
-    df.columns = df.columns.astype(str).str.strip()
-
-    # Try alternative header if needed
-    if "BrandModel" not in df.columns:
-        df = pd.read_csv(url, header=3)
+    # Try multiple header rows automatically
+    for i in range(6):  # check first 6 rows
+        df = pd.read_csv(url, header=i)
         df.columns = df.columns.astype(str).str.strip()
 
-    # Try header=4 if still not found
-    if "BrandModel" not in df.columns:
-        df = pd.read_csv(url, header=4)
-        df.columns = df.columns.astype(str).str.strip()
-
-    # If still missing → show debug and stop
-    if "BrandModel" not in df.columns:
-        st.error("❌ Unable to detect 'BrandModel' column")
-        st.write("Detected columns:", df.columns.tolist())
+        if "BrandModel" in df.columns or "Brand Model" in df.columns:
+            st.success(f"✅ Header detected at row {i}")
+            break
+    else:
+        st.error("❌ Could not detect correct header row")
+        st.write("Last detected columns:", df.columns.tolist())
         st.stop()
+
+    # Normalize column names
+    df = df.rename(columns={
+        "Brand Model": "BrandModel",
+        "Equipment Type": "EquipmentType",
+        "End Date": "EndDate",
+        "Start Date": "StartDate"
+    })
+
+    # Clean data safely
+    if "BrandModel" in df.columns:
+        df["BrandModel"] = df["BrandModel"].astype(str).str.upper().str.strip()
+
+    if "EquipmentType" in df.columns:
+        df["EquipmentType"] = df["EquipmentType"].astype(str).str.title().str.strip()
+
+    if "EndDate" in df.columns:
+        df["EndDate"] = pd.to_datetime(df["EndDate"], errors="coerce")
+
+    return df
 
     # ==================================================
     # NORMALIZE COLUMN NAMES

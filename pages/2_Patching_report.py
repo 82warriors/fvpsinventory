@@ -36,16 +36,8 @@ acad_total = df.get("ACAD INSTALLED", pd.Series(dtype=float)).sum()
 
 col1, col2 = st.columns(2)
 
-total_devices = admin_total + acad_total
-
-installed = (
-    df.get("ADMIN INSTALLED", 0).sum() +
-    df.get("ACAD INSTALLED", 0).sum()
-)
-
-percentage = (installed / total_devices * 100) if total_devices > 0 else 0
-
-st.metric("Installed %", f"{percentage:.1f}%")
+col1.metric("Total Admin Devices", int(admin_total))
+col2.metric("Total Acad Devices", int(acad_total))
 
 # =========================
 # FILTER

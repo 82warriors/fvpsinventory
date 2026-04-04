@@ -17,14 +17,13 @@ def load_data():
 
     df = None
 
-    # 🔍 Auto-detect header
+    # 🔍 Auto-detect header (silent)
     for i in range(6):
         temp = pd.read_csv(url, header=i)
         temp.columns = temp.columns.astype(str).str.strip()
 
         if "BrandModel" in temp.columns or "Brand Model" in temp.columns:
             df = temp
-            st.success(f"✅ Header detected at row {i}")
             break
 
     if df is None:
@@ -66,18 +65,34 @@ def load_data():
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
+    # Remove completely empty rows (important)
+    df = df.dropna(how="all")
+
     return df
 
 
 df = load_data()
 
 # ==================================================
+# REFRESH BUTTON
+# ==================================================
+if st.button("🔄 Refresh Dashboard"):
+    st.cache_data.clear()
+    st.rerun()
+
+# ==================================================
 # KPI CALCULATIONS
 # ==================================================
 today = pd.Timestamp.today()
 
-expired = df[df["EndDate"] < today] if "EndDate" in df.columns else pd.DataFrame()
-expiring = df[df["EndDate"] <= today + pd.Timedelta(days=30)] if "EndDate" in df.columns else pd.DataFrame()
+if "EndDate" in df.columns:
+    expired = df[df["EndDate"] < today]
+    expiring = df[
+        (df["EndDate"] >= today) &
+        (df["EndDate"] <= today + pd.Timedelta(days=30))
+    ]
+else:
+    expired = expiring = pd.DataFrame()
 
 total_devices = len(df)
 expired_count = len(expired)
@@ -114,12 +129,16 @@ with colA:
     st.markdown("### Equipment Distribution")
 
     if "EquipmentType" in df.columns:
-        eq_chart = df["EquipmentType"].value_counts()
+        eq_chart = (
+            df["EquipmentType"]
+            .value_counts()
+            .sort_values(ascending=False)
+        )
         st.bar_chart(eq_chart)
     else:
         st.info("No EquipmentType data")
 
-# Expiry Trend
+# Expiry Trend (sorted correctly)
 with colB:
     st.markdown("### Expiry Timeline")
 
@@ -128,6 +147,7 @@ with colB:
             df.dropna(subset=["EndDate"])
             .groupby(df["EndDate"].dt.to_period("M"))
             .size()
+            .sort_index()
         )
 
         expiry_chart.index = expiry_chart.index.astype(str)
@@ -141,8 +161,15 @@ with colB:
 st.markdown("## 🏆 Top Equipment Models")
 
 if "BrandModel" in df.columns:
-    top_models = df["BrandModel"].value_counts().head(10)
-    st.dataframe(top_models, use_container_width=True)
+    top_models = (
+        df["BrandModel"]
+        .value_counts()
+        .reset_index()
+        .head(10)
+    )
+    top_models.columns = ["BrandModel", "Count"]
+
+    st.dataframe(top_models, use_container_width=True, hide_index=True)
 else:
     st.info("No BrandModel data")
 
@@ -152,5 +179,10 @@ else:
 if "Last Updated" in df.columns:
     st.markdown("## 🕒 Recently Updated")
 
-    recent = df.sort_values("Last Updated", ascending=False).head(10)
-    st.dataframe(recent, use_container_width=True)
+    recent = (
+        df.sort_values("Last Updated", ascending=False)
+        .dropna(subset=["Last Updated"])
+        .head(10)
+    )
+
+    st.dataframe(recent, use_container_width=True, hide_index=True)

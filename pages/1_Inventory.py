@@ -205,7 +205,7 @@ def render_table(df):
 # ==================================================
 # TABS
 # ==================================================
-tab1, tab2 = st.tabs(["📋 Full Inventory", "📊 Equipment Summary"])
+tab1, tab2 = st.tabs(["📋 Full Inventory", "📊 Equipment Expiry])
 
 # -------------------------------
 # TAB 1 - INVENTORY

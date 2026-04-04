@@ -30,10 +30,22 @@ df = load_data()
 # =========================
 st.markdown("### 📊 Overview")
 
-c1, c2 = st.columns(2)
+# Safe column handling
+admin_total = df.get("ADMIN INSTALLED", pd.Series(dtype=float)).sum()
+acad_total = df.get("ACAD INSTALLED", pd.Series(dtype=float)).sum()
 
-c1.metric("Total Records", len(df))
-c2.metric("Weeks Available", df["Week"].nunique() if "Week" in df.columns else 0)
+col1, col2 = st.columns(2)
+
+total_devices = admin_total + acad_total
+
+installed = (
+    df.get("ADMIN INSTALLED", 0).sum() +
+    df.get("ACAD INSTALLED", 0).sum()
+)
+
+percentage = (installed / total_devices * 100) if total_devices > 0 else 0
+
+st.metric("Installed %", f"{percentage:.1f}%")
 
 # =========================
 # FILTER

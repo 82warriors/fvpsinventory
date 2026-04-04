@@ -218,7 +218,7 @@ def render_table(df):
                     pass
 
             display_val = "" if pd.isna(val) else val
-            html += f"<td class='{cell_class}'>{display_val}</td>"
+   
 
         html += "</tr>"
 

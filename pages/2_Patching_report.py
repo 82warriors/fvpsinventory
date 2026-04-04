@@ -63,3 +63,15 @@ st.download_button("📥 Download Report", csv, "patching.csv", "text/csv")
 # TABLE
 # =========================
 st.dataframe(df, use_container_width=True)
+
+# ==================================================
+# FIX DATE COLUMN
+# ==================================================
+if "DATE" in df.columns:
+    df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
+
+    # Remove invalid dates
+    df = df[df["DATE"].notna()]
+
+    # Format display (01 March 2026)
+    df["DATE_DISPLAY"] = df["DATE"].dt.strftime("%d %B %Y")

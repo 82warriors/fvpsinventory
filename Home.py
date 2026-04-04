@@ -9,44 +9,27 @@ st.set_page_config(page_title="FVPS Dashboard", layout="wide")
 st.title("📊 FVPS Dashboard")
 
 # ==================================================
-# LOAD DATA (BULLETPROOF)
+# LOAD DATA (CLEAN + STABLE)
 # ==================================================
 @st.cache_data(ttl=120)
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/1lmCotLUgTLJBKska2y7od2LTPT_qooIFS0_zyVnRI0A/export?format=csv"
 
-    # Try multiple header rows automatically
-    for i in range(6):  # check first 6 rows
-        df = pd.read_csv(url, header=i)
-        df.columns = df.columns.astype(str).str.strip()
+    df = None
 
-        if "BrandModel" in df.columns or "Brand Model" in df.columns:
+    # 🔍 Auto-detect header
+    for i in range(6):
+        temp = pd.read_csv(url, header=i)
+        temp.columns = temp.columns.astype(str).str.strip()
+
+        if "BrandModel" in temp.columns or "Brand Model" in temp.columns:
+            df = temp
             st.success(f"✅ Header detected at row {i}")
             break
-    else:
+
+    if df is None:
         st.error("❌ Could not detect correct header row")
-        st.write("Last detected columns:", df.columns.tolist())
         st.stop()
-
-    # Normalize column names
-    df = df.rename(columns={
-        "Brand Model": "BrandModel",
-        "Equipment Type": "EquipmentType",
-        "End Date": "EndDate",
-        "Start Date": "StartDate"
-    })
-
-    # Clean data safely
-    if "BrandModel" in df.columns:
-        df["BrandModel"] = df["BrandModel"].astype(str).str.upper().str.strip()
-
-    if "EquipmentType" in df.columns:
-        df["EquipmentType"] = df["EquipmentType"].astype(str).str.title().str.strip()
-
-    if "EndDate" in df.columns:
-        df["EndDate"] = pd.to_datetime(df["EndDate"], errors="coerce")
-
-    return df
 
     # ==================================================
     # NORMALIZE COLUMN NAMES
@@ -62,20 +45,26 @@ def load_data():
     # ==================================================
     # CLEAN DATA
     # ==================================================
-    df["BrandModel"] = df["BrandModel"].astype(str).str.upper().str.strip()
+    if "BrandModel" in df.columns:
+        df["BrandModel"] = (
+            df["BrandModel"]
+            .astype(str)
+            .str.upper()
+            .str.strip()
+        )
 
     if "EquipmentType" in df.columns:
-        df["EquipmentType"] = df["EquipmentType"].astype(str).str.title().str.strip()
+        df["EquipmentType"] = (
+            df["EquipmentType"]
+            .astype(str)
+            .str.title()
+            .str.strip()
+        )
 
     # Convert dates safely
-    if "EndDate" in df.columns:
-        df["EndDate"] = pd.to_datetime(df["EndDate"], errors="coerce")
-
-    if "StartDate" in df.columns:
-        df["StartDate"] = pd.to_datetime(df["StartDate"], errors="coerce")
-
-    if "Last Updated" in df.columns:
-        df["Last Updated"] = pd.to_datetime(df["Last Updated"], errors="coerce")
+    for col in ["EndDate", "StartDate", "Last Updated"]:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors="coerce")
 
     return df
 
@@ -93,7 +82,7 @@ expiring = df[df["EndDate"] <= today + pd.Timedelta(days=30)] if "EndDate" in df
 total_devices = len(df)
 expired_count = len(expired)
 expiring_count = len(expiring)
-unique_models = df["BrandModel"].nunique()
+unique_models = df["BrandModel"].nunique() if "BrandModel" in df.columns else 0
 
 # ==================================================
 # KPI SECTION
@@ -151,8 +140,11 @@ with colB:
 # ==================================================
 st.markdown("## 🏆 Top Equipment Models")
 
-top_models = df["BrandModel"].value_counts().head(10)
-st.dataframe(top_models, use_container_width=True)
+if "BrandModel" in df.columns:
+    top_models = df["BrandModel"].value_counts().head(10)
+    st.dataframe(top_models, use_container_width=True)
+else:
+    st.info("No BrandModel data")
 
 # ==================================================
 # RECENTLY UPDATED

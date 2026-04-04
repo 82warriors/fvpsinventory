@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import html   # ✅ IMPORTANT (fix for broken HTML)
+import html
 
 # ==================================================
 # PAGE CONFIG
@@ -39,7 +39,7 @@ def load_data(gid, sheet_name, header_row):
         df.columns = df.columns.astype(str).str.strip()
         df = df.loc[:, ~df.columns.str.contains("^Unnamed", na=False)]
 
-        # Fix Location → 01, 02
+        # Fix Location
         if "Location" in df.columns:
             df["Location"] = df["Location"].apply(
                 lambda x: str(int(float(x))).zfill(2)
@@ -67,10 +67,23 @@ def load_data(gid, sheet_name, header_row):
                 .replace({"NAN": None, "NONE": None, "": None})
             )
 
-        # ✅ Convert + format EndDate
+        # ==================================================
+        # FORMAT ALL DATES
+        # ==================================================
+        date_cols = ["StartDate", "EndDate", "Last Updated"]
+
+        for col in date_cols:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], errors="coerce")
+
+        # Create display column (only for EndDate)
         if "EndDate" in df.columns:
-            df["EndDate"] = pd.to_datetime(df["EndDate"], errors="coerce")
             df["EndDate_Display"] = df["EndDate"].dt.strftime("%d %B %Y")
+
+        # Convert all dates to display format
+        for col in date_cols:
+            if col in df.columns:
+                df[col] = df[col].dt.strftime("%d %B %Y")
 
         # Force Category
         df["Category"] = "SSOE" if sheet_name == "SSOE" else "NON-SSOE"
@@ -149,7 +162,7 @@ c2.metric("SSOE", len(filtered_df[filtered_df["Category"] == "SSOE"]))
 c3.metric("NON-SSOE", len(filtered_df[filtered_df["Category"] == "NON-SSOE"]))
 
 # ==================================================
-# TABLE RENDER (SAFE HTML + EXPIRY)
+# TABLE RENDER
 # ==================================================
 def render_table(df):
     html_table = """
@@ -206,7 +219,7 @@ def render_table(df):
                 except:
                     pass
 
-            safe_val = "" if pd.isna(val) else html.escape(str(val))  # ✅ FIX
+            safe_val = "" if pd.isna(val) else html.escape(str(val))
             html_table += f"<td class='{cell_class}'>{safe_val}</td>"
 
         html_table += "</tr>"
@@ -219,10 +232,11 @@ def render_table(df):
 # ==================================================
 tab1, tab2 = st.tabs(["📋 Full Inventory", "⏳ Equipment Expiry"])
 
-# TAB 1
+# TAB 1 (HIDE EndDate_Display)
 with tab1:
     st.subheader("📋 Inventory Data")
-    st.markdown(render_table(filtered_df), unsafe_allow_html=True)
+    display_df = filtered_df.drop(columns=["EndDate_Display"], errors="ignore")
+    st.markdown(render_table(display_df), unsafe_allow_html=True)
 
 # TAB 2
 with tab2:

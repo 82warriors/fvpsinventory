@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
 
+if st.button("🔄 Refresh Data"):
+    st.cache_data.clear()
+
 # ==================================================
 # PAGE CONFIG
 # ==================================================

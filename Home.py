@@ -9,61 +9,119 @@ st.set_page_config(page_title="FVPS Dashboard", layout="wide")
 st.title("📊 FVPS IT Management Dashboard")
 
 # ==================================================
-# LOAD DATA
+# GOOGLE SHEET CONFIG
 # ==================================================
-@st.cache_data(ttl=120)
+FILE_ID = "1lmCotLUgTLJBKska2y7od2LTPT_qooIFS0_zyVnRI0A"
+EXCEL_URL = f"https://docs.google.com/spreadsheets/d/{FILE_ID}/export?format=xlsx"
+
+# ==================================================
+# LOAD DATA (ROBUST + SAFE)
+# ==================================================
+@st.cache_data(ttl=300)
 def load_data():
-    # 🔁 REPLACE WITH YOUR GOOGLE SHEET / CSV
-    inventory_url = "https://docs.google.com/spreadsheets/d/1lmCotLUgTLJBKska2y7od2LTPT_qooIFS0_zyVnRI0A/edit?gid=1895613573#gid=1895613573&fvid=520134364"
-    patching_url = "https://docs.google.com/spreadsheets/d/1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE/edit?gid=0#gid=0"
+    try:
+        xls = pd.ExcelFile(EXCEL_URL)
 
-    inventory_df = pd.read_csv(inventory_url)
-    patching_df = pd.read_csv(patching_url)
+        inventory_df = pd.DataFrame()
+        patching_df = pd.DataFrame()
 
-    return inventory_df, patching_df
+        for sheet in xls.sheet_names:
+            df = pd.read_excel(xls, sheet_name=sheet)
+            df.columns = df.columns.astype(str).str.strip()
+
+            # Auto-detect inventory
+            if "Status" in df.columns:
+                inventory_df = df.copy()
+
+            # Auto-detect patching
+            if "ADMIN INSTALLED" in df.columns:
+                patching_df = df.copy()
+
+        return inventory_df, patching_df
+
+    except Exception as e:
+        st.error("❌ Failed to load data from Google Sheets")
+        st.exception(e)
+        return pd.DataFrame(), pd.DataFrame()
 
 inventory_df, patching_df = load_data()
 
 # ==================================================
-# DATA CLEANING (SAFE DEFAULTS)
+# CLEANING FUNCTIONS
 # ==================================================
-inventory_df.columns = inventory_df.columns.str.strip()
-patching_df.columns = patching_df.columns.str.strip()
+def clean_inventory(df):
+    if df.empty:
+        return df
+
+    df = df.dropna(how="all")
+    df.columns = df.columns.str.strip()
+
+    rename_map = {
+        "Equipment Type": "EquipmentType",
+        "equipmenttype": "EquipmentType",
+        "STATUS": "Status",
+        "status": "Status",
+        "LOCATION": "Location",
+        "location": "Location",
+        "LEVEL": "Level",
+        "level": "Level"
+    }
+
+    df.rename(columns=rename_map, inplace=True)
+    return df
+
+
+def clean_patching(df):
+    if df.empty:
+        return df
+
+    df = df.dropna(how="all")
+    df.fillna(0, inplace=True)
+    return df
+
+
+inventory_df = clean_inventory(inventory_df)
+patching_df = clean_patching(patching_df)
 
 # ==================================================
 # KPI CALCULATIONS
 # ==================================================
 total_devices = len(inventory_df)
 
-active_count = len(inventory_df[inventory_df["Status"] == "🟢 Active"])
-faulty_count = len(inventory_df[inventory_df["Status"].isin(["🔴 Faulty", "Faulty"])])
+status_col = inventory_df.get("Status", pd.Series(dtype=str)).astype(str)
 
-# ---- PATCHING FORMULA (YOUR CUSTOM LOGIC) ----
-patching_df.fillna(0, inplace=True)
+active_count = status_col.str.contains("Active", case=False, na=False).sum()
+faulty_count = status_col.str.contains("Fault", case=False, na=False).sum()
 
-patching_df["Installed"] = (
-    patching_df.get("ADMIN INSTALLED", 0) +
-    patching_df.get("ACAD INSTALLED", 0)
-)
+# ---- PATCHING ----
+if not patching_df.empty:
 
-patching_df["Total"] = (
-    patching_df.get("ADMIN SCCM EPP > 4 wks", 0) +
-    patching_df.get("ACAD SCCM EPP > 4 wks", 0) +
-    patching_df.get("ADMIN NOT CONNECTED", 0) +
-    patching_df.get("ACAD NOT CONNECTED", 0) +
-    patching_df.get("ADMIN REQUIRED", 0) +
-    patching_df.get("ACAD REQUIRED", 0) +
-    patching_df.get("ADMIN UNKNOWN", 0) +
-    patching_df.get("ACAD UNKNOWN", 0) +
-    patching_df.get("E-EXAM", 0) +
-    patching_df.get("FAULTY", 0)
-)
+    patching_df["Installed"] = (
+        patching_df.get("ADMIN INSTALLED", 0) +
+        patching_df.get("ACAD INSTALLED", 0)
+    )
 
-patching_df["Compliance %"] = (
-    (patching_df["Installed"] / patching_df["Total"]) * 100
-).round(2)
+    patching_df["Total"] = (
+        patching_df.get("ADMIN SCCM EPP > 4 wks", 0) +
+        patching_df.get("ACAD SCCM EPP > 4 wks", 0) +
+        patching_df.get("ADMIN NOT CONNECTED", 0) +
+        patching_df.get("ACAD NOT CONNECTED", 0) +
+        patching_df.get("ADMIN REQUIRED", 0) +
+        patching_df.get("ACAD REQUIRED", 0) +
+        patching_df.get("ADMIN UNKNOWN", 0) +
+        patching_df.get("ACAD UNKNOWN", 0) +
+        patching_df.get("E-EXAM", 0) +
+        patching_df.get("FAULTY", 0)
+    )
 
-latest_patching = patching_df["Compliance %"].iloc[-1] if not patching_df.empty else 0
+    patching_df["Compliance %"] = (
+        (patching_df["Installed"] / patching_df["Total"]) * 100
+    ).fillna(0).round(2)
+
+    latest_patching = patching_df["Compliance %"].iloc[-1]
+
+else:
+    latest_patching = 0
 
 # ==================================================
 # KPI DISPLAY
@@ -73,8 +131,8 @@ st.subheader("📌 Key Metrics")
 col1, col2, col3, col4 = st.columns(4)
 
 col1.metric("Total Devices", total_devices)
-col2.metric("🟢 Active Devices", active_count)
-col3.metric("🔴 Faulty Devices", faulty_count)
+col2.metric("🟢 Active Devices", int(active_count))
+col3.metric("🔴 Faulty Devices", int(faulty_count))
 col4.metric("📊 Patching Compliance", f"{latest_patching}%")
 
 # ==================================================
@@ -85,108 +143,65 @@ st.subheader("🔍 Filters")
 
 col1, col2 = st.columns(2)
 
+level_filter = "All"
+type_filter = "All"
+
 if "Level" in inventory_df.columns:
-    level_filter = col1.selectbox("Select Level", ["All"] + sorted(inventory_df["Level"].dropna().unique()))
-else:
-    level_filter = "All"
+    level_filter = col1.selectbox(
+        "Select Level",
+        ["All"] + sorted(inventory_df["Level"].dropna().astype(str).unique())
+    )
 
 if "EquipmentType" in inventory_df.columns:
-    type_filter = col2.selectbox("Select Equipment Type", ["All"] + sorted(inventory_df["EquipmentType"].dropna().unique()))
-else:
-    type_filter = "All"
+    type_filter = col2.selectbox(
+        "Select Equipment Type",
+        ["All"] + sorted(inventory_df["EquipmentType"].dropna().astype(str).unique())
+    )
 
 filtered_df = inventory_df.copy()
 
 if level_filter != "All":
-    filtered_df = filtered_df[filtered_df["Level"] == level_filter]
+    filtered_df = filtered_df[filtered_df["Level"].astype(str) == level_filter]
 
 if type_filter != "All":
-    filtered_df = filtered_df[filtered_df["EquipmentType"] == type_filter]
+    filtered_df = filtered_df[filtered_df["EquipmentType"].astype(str) == type_filter]
 
 # ==================================================
-# CHARTS SECTION
+# CHARTS
 # ==================================================
 st.divider()
 st.subheader("📊 Visual Insights")
 
-# ---- PIE CHART: EQUIPMENT DISTRIBUTION ----
 col1, col2 = st.columns(2)
 
+# Pie Chart
 if "EquipmentType" in filtered_df.columns:
-    pie_fig = px.pie(
-        filtered_df,
-        names="EquipmentType",
-        title="Device Distribution"
-    )
-    col1.plotly_chart(pie_fig, use_container_width=True)
+    fig1 = px.pie(filtered_df, names="EquipmentType", title="Device Distribution")
+    col1.plotly_chart(fig1, use_container_width=True)
 
-# ---- BAR CHART: STATUS ----
-status_df = filtered_df["Status"].value_counts().reset_index()
-status_df.columns = ["Status", "Count"]
+# Bar Chart
+if "Status" in filtered_df.columns:
+    status_df = filtered_df["Status"].value_counts().reset_index()
+    status_df.columns = ["Status", "Count"]
 
-bar_fig = px.bar(
-    status_df,
-    x="Status",
-    y="Count",
-    title="Device Status Overview",
-    text="Count"
-)
-
-col2.plotly_chart(bar_fig, use_container_width=True)
+    fig2 = px.bar(status_df, x="Status", y="Count", text="Count", title="Device Status Overview")
+    col2.plotly_chart(fig2, use_container_width=True)
 
 # ==================================================
 # PATCHING TREND
 # ==================================================
-st.divider()
-st.subheader("📈 Patching Compliance Trend")
+if not patching_df.empty and "Week" in patching_df.columns:
+    st.divider()
+    st.subheader("📈 Patching Compliance Trend")
 
-if "Week" in patching_df.columns:
-    line_fig = px.line(
+    fig3 = px.line(
         patching_df,
         x="Week",
         y="Compliance %",
-        markers=True,
-        title="Weekly Patching Compliance"
-    )
-    st.plotly_chart(line_fig, use_container_width=True)
-
-# ==================================================
-# FAULT ANALYSIS
-# ==================================================
-st.divider()
-st.subheader("🧯 Fault Analysis")
-
-col1, col2 = st.columns(2)
-
-# Fault by Location
-if "Location" in filtered_df.columns:
-    fault_loc = filtered_df[filtered_df["Status"].isin(["🔴 Faulty", "Faulty"])]
-    fault_loc = fault_loc["Location"].value_counts().reset_index()
-    fault_loc.columns = ["Location", "Count"]
-
-    fig_fault_loc = px.bar(
-        fault_loc,
-        x="Location",
-        y="Count",
-        title="Faults by Location"
+        markers=True
     )
 
-    col1.plotly_chart(fig_fault_loc, use_container_width=True)
-
-# Fault by Equipment
-if "EquipmentType" in filtered_df.columns:
-    fault_type = filtered_df[filtered_df["Status"].isin(["🔴 Faulty", "Faulty"])]
-    fault_type = fault_type["EquipmentType"].value_counts().reset_index()
-    fault_type.columns = ["EquipmentType", "Count"]
-
-    fig_fault_type = px.bar(
-        fault_type,
-        x="EquipmentType",
-        y="Count",
-        title="Faults by Equipment Type"
-    )
-
-    col2.plotly_chart(fig_fault_type, use_container_width=True)
+    st.plotly_chart(fig3, use_container_width=True)
 
 # ==================================================
 # SMART INSIGHTS
@@ -195,15 +210,19 @@ st.divider()
 st.subheader("🧠 System Insights")
 
 if latest_patching < 80:
-    st.warning("⚠️ Patching compliance is below 80%! Immediate action recommended.")
+    st.warning("⚠️ Patching compliance is below 80%")
 
-if faulty_count > (0.1 * total_devices):
-    st.error("🚨 High number of faulty devices detected!")
+if total_devices > 0 and faulty_count > total_devices * 0.1:
+    st.error("🚨 High number of faulty devices")
 
-if active_count / total_devices > 0.9:
-    st.success("✅ System is in healthy condition!")
+if total_devices > 0 and active_count / total_devices > 0.9:
+    st.success("✅ System is healthy")
 
 # ==================================================
-# FOOTER
+# DEBUG PANEL
 # ==================================================
-st.caption("FVPS IT Dashboard • Auto-updated")
+with st.expander("🔧 Debug Data"):
+    st.write("Inventory Columns:", list(inventory_df.columns))
+    st.write("Patching Columns:", list(patching_df.columns))
+    st.write("Inventory Preview:", inventory_df.head())
+    st.write("Patching Preview:", patching_df.head())

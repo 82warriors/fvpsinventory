@@ -14,8 +14,8 @@ st.title("📊 FVPS IT Management Dashboard")
 @st.cache_data(ttl=120)
 def load_data():
     # 🔁 REPLACE WITH YOUR GOOGLE SHEET / CSV
-    inventory_url = "YOUR_INVENTORY_CSV_LINK"
-    patching_url = "YOUR_PATCHING_CSV_LINK"
+    inventory_url = "https://docs.google.com/spreadsheets/d/1lmCotLUgTLJBKska2y7od2LTPT_qooIFS0_zyVnRI0A/edit?gid=1895613573#gid=1895613573&fvid=520134364"
+    patching_url = "https://docs.google.com/spreadsheets/d/1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE/edit?gid=0#gid=0"
 
     inventory_df = pd.read_csv(inventory_url)
     patching_df = pd.read_csv(patching_url)

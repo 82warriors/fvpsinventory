@@ -9,7 +9,7 @@ import re
 st.set_page_config(page_title="Upgrade Tracking", layout="wide")
 
 st.title("⬆️ Upgrade Status Dashboard")
-st.caption("Auto-detecting latest worksheet")
+st.caption("Auto-detect latest worksheet based on sheet name")
 
 # ==================================================
 # CONFIG
@@ -23,60 +23,41 @@ TARGET_MODELS = [
 ]
 
 # ==================================================
-# 🔍 GET ALL SHEETS
+# 🔍 GET SHEETS (SAFE HTML PARSE)
 # ==================================================
 @st.cache_data(ttl=300)
 def get_sheets():
-
-    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:json"
-    res = requests.get(url)
-
-    text = res.text[47:-2]
-    data = eval(text)
-
-    # Extract sheet info manually
-    sheets = []
-
-    # fallback approach: scrape from HTML
-    html_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
-    html = requests.get(html_url).text
+    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
+    html = requests.get(url).text
 
     matches = re.findall(r'"sheetId":(\d+).*?"title":"(.*?)"', html)
 
+    sheets = []
     for gid, name in matches:
-        sheets.append({
-            "gid": gid,
-            "name": name
-        })
+        sheets.append({"gid": gid, "name": name})
 
     return sheets
 
 # ==================================================
-# 🧠 PARSE DATE FROM SHEET NAME
+# 🧠 EXTRACT DATE FROM SHEET NAME
 # ==================================================
 def extract_date(name):
-    try:
-        return pd.to_datetime(name, errors="coerce")
-    except:
-        return None
+    return pd.to_datetime(name, errors="coerce")
 
 # ==================================================
 # 🔥 GET LATEST SHEET
 # ==================================================
 @st.cache_data(ttl=300)
-def get_latest_gid():
-
+def get_latest_sheet():
     sheets = get_sheets()
-
     df = pd.DataFrame(sheets)
 
     df["date"] = df["name"].apply(extract_date)
-
     df = df.dropna(subset=["date"])
 
     if df.empty:
-        st.error("❌ No sheet names contain valid dates")
-        st.write(df)
+        st.error("❌ No valid dated worksheet found")
+        st.write(sheets)
         st.stop()
 
     latest = df.sort_values("date", ascending=False).iloc[0]
@@ -84,12 +65,28 @@ def get_latest_gid():
     return latest["gid"], latest["name"]
 
 # ==================================================
-# LOAD SHEET
+# LOAD SHEET (WITH HEADER DETECTION)
 # ==================================================
 def load_sheet(gid):
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid={gid}"
 
-    df = pd.read_csv(url, dtype=str)
+    raw = pd.read_csv(url, header=None, dtype=str)
+
+    header_row = None
+
+    for i in range(len(raw)):
+        row = raw.iloc[i].astype(str).str.upper()
+
+        if "MODEL" in row.values and "IPU STATUS" in row.values:
+            header_row = i
+            break
+
+    if header_row is None:
+        st.error("❌ Cannot detect header row (MODEL / IPU STATUS)")
+        st.write(raw.head(10))
+        st.stop()
+
+    df = pd.read_csv(url, header=header_row, dtype=str)
 
     df.columns = df.columns.astype(str).str.strip()
     df = df.loc[:, ~df.columns.str.contains("^Unnamed", na=False)]
@@ -97,9 +94,9 @@ def load_sheet(gid):
     return df
 
 # ==================================================
-# 🚀 LOAD LATEST DATA
+# 🚀 LOAD DATA
 # ==================================================
-gid, sheet_name = get_latest_gid()
+gid, sheet_name = get_latest_sheet()
 
 st.success(f"📄 Using latest sheet: {sheet_name}")
 
@@ -111,7 +108,7 @@ df = load_sheet(gid)
 df.columns = df.columns.str.upper()
 
 if "MODEL" not in df.columns or "IPU STATUS" not in df.columns:
-    st.error("❌ Required columns not found")
+    st.error("❌ Required columns missing")
     st.write(df.columns.tolist())
     st.stop()
 
@@ -125,7 +122,7 @@ df = df[df["MODEL"].isin(TARGET_MODELS)]
 df = df.dropna(subset=["MODEL"])
 
 # ==================================================
-# SUMMARY
+# COMPUTE SUMMARY
 # ==================================================
 summary = (
     df.groupby(["MODEL", "IPU STATUS"])
@@ -133,6 +130,7 @@ summary = (
     .unstack(fill_value=0)
 )
 
+# Ensure columns exist
 for col in ["Completed", "Not Completed"]:
     if col not in summary.columns:
         summary[col] = 0
@@ -140,7 +138,7 @@ for col in ["Completed", "Not Completed"]:
 summary = summary.reset_index()
 
 # ==================================================
-# %
+# ADD %
 # ==================================================
 summary["Total"] = summary["Completed"] + summary["Not Completed"]
 
@@ -187,7 +185,7 @@ chart_df = summary.set_index("MODEL")[["Completed", "Not Completed"]]
 st.bar_chart(chart_df)
 
 # ==================================================
-# PROGRESS
+# PROGRESS BARS
 # ==================================================
 st.markdown("## 🔄 Progress by Model")
 
@@ -198,5 +196,12 @@ for _, row in summary.iterrows():
 # ==================================================
 # RAW DATA
 # ==================================================
-with st.expander("🔍 Raw Data"):
+with st.expander("🔍 View Raw Data"):
     st.dataframe(df, use_container_width=True)
+
+# ==================================================
+# REFRESH
+# ==================================================
+if st.button("🔄 Refresh Data"):
+    st.cache_data.clear()
+    st.rerun()

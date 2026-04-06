@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import requests
-import re
 
 # ==================================================
 # PAGE CONFIG
@@ -9,7 +8,7 @@ import re
 st.set_page_config(page_title="Upgrade Tracking", layout="wide")
 
 st.title("⬆️ Upgrade Status Dashboard")
-st.caption("Auto-detect latest worksheet based on sheet name")
+st.caption("Powered by Google Sheets API (stable version)")
 
 # ==================================================
 # CONFIG
@@ -23,68 +22,44 @@ TARGET_MODELS = [
 ]
 
 # ==================================================
-# 🔍 GET SHEETS (SAFE HTML PARSE)
+# 🔍 GET SHEETS VIA API (NO AUTH NEEDED)
 # ==================================================
 @st.cache_data(ttl=300)
-def get_latest_sheet():
+def get_sheets():
+    url = f"https://spreadsheets.google.com/feeds/worksheets/{SPREADSHEET_ID}/public/full?alt=json"
+    res = requests.get(url).json()
 
-    try:
-        url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
-        html = requests.get(url).text
+    sheets = []
 
-        matches = re.findall(r'"sheetId":(\d+).*?"title":"(.*?)"', html)
+    for entry in res["feed"]["entry"]:
+        title = entry["title"]["$t"]
+        gid = entry["link"][1]["href"].split("gid=")[-1]
 
-        if not matches:
-            raise ValueError("No sheets found")
+        sheets.append({
+            "name": title,
+            "gid": gid
+        })
 
-        sheets = [{"gid": gid, "name": name} for gid, name in matches]
-
-        df = pd.DataFrame(sheets)
-
-        if "name" not in df.columns:
-            raise ValueError("Invalid sheet structure")
-
-        # Try parse date
-        df["date"] = pd.to_datetime(df["name"], errors="coerce")
-
-        df_valid = df.dropna(subset=["date"])
-
-        if df_valid.empty:
-            raise ValueError("No valid dated sheets")
-
-        latest = df_valid.sort_values("date", ascending=False).iloc[0]
-
-        return latest["gid"], latest["name"]
-
-    except Exception as e:
-        st.warning("⚠️ Auto-detect failed, using fallback sheet")
-
-        # 🔥 FALLBACK (your current working sheet)
-        return "1946114847", "Fallback Sheet"
+    return sheets
 
 # ==================================================
-# 🧠 EXTRACT DATE FROM SHEET NAME
-# ==================================================
-def extract_date(name):
-    return pd.to_datetime(name, errors="coerce")
-
-# ==================================================
-# 🔥 GET LATEST SHEET
+# 🧠 GET LATEST SHEET (BY DATE NAME)
 # ==================================================
 @st.cache_data(ttl=300)
 def get_latest_sheet():
     sheets = get_sheets()
+
     df = pd.DataFrame(sheets)
 
-    df["date"] = df["name"].apply(extract_date)
-    df = df.dropna(subset=["date"])
+    df["date"] = pd.to_datetime(df["name"], errors="coerce")
 
-    if df.empty:
-        st.error("❌ No valid dated worksheet found")
-        st.write(sheets)
-        st.stop()
+    df_valid = df.dropna(subset=["date"])
 
-    latest = df.sort_values("date", ascending=False).iloc[0]
+    if df_valid.empty:
+        st.warning("⚠️ No date-based sheet names found — using last sheet")
+        return df.iloc[-1]["gid"], df.iloc[-1]["name"]
+
+    latest = df_valid.sort_values("date", ascending=False).iloc[0]
 
     return latest["gid"], latest["name"]
 
@@ -106,7 +81,7 @@ def load_sheet(gid):
             break
 
     if header_row is None:
-        st.error("❌ Cannot detect header row (MODEL / IPU STATUS)")
+        st.error("❌ Cannot detect header row")
         st.write(raw.head(10))
         st.stop()
 
@@ -146,7 +121,7 @@ df = df[df["MODEL"].isin(TARGET_MODELS)]
 df = df.dropna(subset=["MODEL"])
 
 # ==================================================
-# COMPUTE SUMMARY
+# SUMMARY
 # ==================================================
 summary = (
     df.groupby(["MODEL", "IPU STATUS"])
@@ -154,7 +129,6 @@ summary = (
     .unstack(fill_value=0)
 )
 
-# Ensure columns exist
 for col in ["Completed", "Not Completed"]:
     if col not in summary.columns:
         summary[col] = 0
@@ -162,7 +136,7 @@ for col in ["Completed", "Not Completed"]:
 summary = summary.reset_index()
 
 # ==================================================
-# ADD %
+# %
 # ==================================================
 summary["Total"] = summary["Completed"] + summary["Not Completed"]
 
@@ -209,7 +183,7 @@ chart_df = summary.set_index("MODEL")[["Completed", "Not Completed"]]
 st.bar_chart(chart_df)
 
 # ==================================================
-# PROGRESS BARS
+# PROGRESS
 # ==================================================
 st.markdown("## 🔄 Progress by Model")
 

@@ -26,17 +26,41 @@ TARGET_MODELS = [
 # 🔍 GET SHEETS (SAFE HTML PARSE)
 # ==================================================
 @st.cache_data(ttl=300)
-def get_sheets():
-    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
-    html = requests.get(url).text
+def get_latest_sheet():
 
-    matches = re.findall(r'"sheetId":(\d+).*?"title":"(.*?)"', html)
+    try:
+        url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
+        html = requests.get(url).text
 
-    sheets = []
-    for gid, name in matches:
-        sheets.append({"gid": gid, "name": name})
+        matches = re.findall(r'"sheetId":(\d+).*?"title":"(.*?)"', html)
 
-    return sheets
+        if not matches:
+            raise ValueError("No sheets found")
+
+        sheets = [{"gid": gid, "name": name} for gid, name in matches]
+
+        df = pd.DataFrame(sheets)
+
+        if "name" not in df.columns:
+            raise ValueError("Invalid sheet structure")
+
+        # Try parse date
+        df["date"] = pd.to_datetime(df["name"], errors="coerce")
+
+        df_valid = df.dropna(subset=["date"])
+
+        if df_valid.empty:
+            raise ValueError("No valid dated sheets")
+
+        latest = df_valid.sort_values("date", ascending=False).iloc[0]
+
+        return latest["gid"], latest["name"]
+
+    except Exception as e:
+        st.warning("⚠️ Auto-detect failed, using fallback sheet")
+
+        # 🔥 FALLBACK (your current working sheet)
+        return "1946114847", "Fallback Sheet"
 
 # ==================================================
 # 🧠 EXTRACT DATE FROM SHEET NAME

@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
+import re
 
 # ==================================================
 # PAGE CONFIG
@@ -8,7 +9,7 @@ import requests
 st.set_page_config(page_title="Upgrade Tracking", layout="wide")
 
 st.title("⬆️ Upgrade Status Dashboard")
-st.caption("Powered by Google Sheets API (stable version)")
+st.caption("Auto-detect latest worksheet (tab)")
 
 # ==================================================
 # CONFIG
@@ -22,51 +23,42 @@ TARGET_MODELS = [
 ]
 
 # ==================================================
-# 🔍 GET SHEETS VIA API (NO AUTH NEEDED)
+# 🔍 GET ALL SHEETS (STABLE METHOD)
 # ==================================================
 @st.cache_data(ttl=300)
 def get_sheets():
-    url = f"https://spreadsheets.google.com/feeds/worksheets/{SPREADSHEET_ID}/public/full?alt=json"
-    res = requests.get(url).json()
 
-    sheets = []
+    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
+    html = requests.get(url).text
 
-    for entry in res["feed"]["entry"]:
-        title = entry["title"]["$t"]
-        gid = entry["link"][1]["href"].split("gid=")[-1]
+    matches = re.findall(r'"sheetId":(\d+).*?"title":"(.*?)"', html)
 
-        sheets.append({
-            "name": title,
-            "gid": gid
-        })
+    if not matches:
+        st.error("❌ Cannot retrieve sheet list")
+        st.stop()
+
+    sheets = [{"gid": gid, "name": name} for gid, name in matches]
 
     return sheets
 
 # ==================================================
-# 🧠 GET LATEST SHEET (BY DATE NAME)
+# 🔥 GET LATEST TAB (LAST IN LIST)
 # ==================================================
 @st.cache_data(ttl=300)
 def get_latest_sheet():
+
     sheets = get_sheets()
 
-    df = pd.DataFrame(sheets)
-
-    df["date"] = pd.to_datetime(df["name"], errors="coerce")
-
-    df_valid = df.dropna(subset=["date"])
-
-    if df_valid.empty:
-        st.warning("⚠️ No date-based sheet names found — using last sheet")
-        return df.iloc[-1]["gid"], df.iloc[-1]["name"]
-
-    latest = df_valid.sort_values("date", ascending=False).iloc[0]
+    # 👉 Google usually appends newest tab at the end
+    latest = sheets[-1]
 
     return latest["gid"], latest["name"]
 
 # ==================================================
-# LOAD SHEET (WITH HEADER DETECTION)
+# LOAD SHEET (HEADER DETECTION)
 # ==================================================
 def load_sheet(gid):
+
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid={gid}"
 
     raw = pd.read_csv(url, header=None, dtype=str)
@@ -194,7 +186,7 @@ for _, row in summary.iterrows():
 # ==================================================
 # RAW DATA
 # ==================================================
-with st.expander("🔍 View Raw Data"):
+with st.expander("🔍 Raw Data"):
     st.dataframe(df, use_container_width=True)
 
 # ==================================================

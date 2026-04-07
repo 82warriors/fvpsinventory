@@ -9,7 +9,7 @@ import re
 st.set_page_config(page_title="Upgrade Tracking", layout="wide")
 
 st.title("⬆️ Upgrade Status Dashboard")
-st.caption("Auto-detect latest worksheet (tab)")
+st.caption("Automatically uses latest worksheet")
 
 # ==================================================
 # CONFIG
@@ -23,39 +23,43 @@ TARGET_MODELS = [
 ]
 
 # ==================================================
-# 🔍 GET ALL SHEETS (STABLE METHOD)
+# 🔍 GET SHEETS (SAFE)
 # ==================================================
 @st.cache_data(ttl=300)
 def get_sheets():
+    try:
+        url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
+        html = requests.get(url).text
 
-    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
-    html = requests.get(url).text
+        matches = re.findall(r'"sheetId":(\d+).*?"title":"(.*?)"', html)
 
-    matches = re.findall(r'"sheetId":(\d+).*?"title":"(.*?)"', html)
+        sheets = [{"gid": gid, "name": name} for gid, name in matches]
 
-    if not matches:
-        st.error("❌ Cannot retrieve sheet list")
-        st.stop()
+        if not sheets:
+            raise ValueError("No sheets found")
 
-    sheets = [{"gid": gid, "name": name} for gid, name in matches]
+        return sheets
 
-    return sheets
+    except:
+        return []  # fallback handled later
 
 # ==================================================
-# 🔥 GET LATEST TAB (LAST IN LIST)
+# 🔥 GET LATEST TAB (SAFE)
 # ==================================================
 @st.cache_data(ttl=300)
 def get_latest_sheet():
 
     sheets = get_sheets()
 
-    # 👉 Google usually appends newest tab at the end
-    latest = sheets[-1]
+    if sheets:
+        latest = sheets[-1]  # last tab = latest
+        return latest["gid"], latest["name"]
 
-    return latest["gid"], latest["name"]
+    # 🔥 FALLBACK (always works)
+    return "1946114847", "Default Sheet"
 
 # ==================================================
-# LOAD SHEET (HEADER DETECTION)
+# LOAD SHEET
 # ==================================================
 def load_sheet(gid):
 
@@ -89,7 +93,7 @@ def load_sheet(gid):
 # ==================================================
 gid, sheet_name = get_latest_sheet()
 
-st.success(f"📄 Using latest sheet: {sheet_name}")
+st.info(f"📄 Using sheet: {sheet_name}")
 
 df = load_sheet(gid)
 
@@ -121,6 +125,7 @@ summary = (
     .unstack(fill_value=0)
 )
 
+# Ensure columns
 for col in ["Completed", "Not Completed"]:
     if col not in summary.columns:
         summary[col] = 0
@@ -186,7 +191,7 @@ for _, row in summary.iterrows():
 # ==================================================
 # RAW DATA
 # ==================================================
-with st.expander("🔍 Raw Data"):
+with st.expander("🔍 View Raw Data"):
     st.dataframe(df, use_container_width=True)
 
 # ==================================================

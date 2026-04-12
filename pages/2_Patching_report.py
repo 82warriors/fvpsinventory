@@ -11,8 +11,9 @@ st.caption("Loads the worksheet immediately to the right of 'Summary' and shows 
 SPREADSHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
 
 REQUIRED_HEADERS = [
-    "ASSET TAG","SERIAL NUMBER","SCHOOL","HOSTNAME","DEVICE TYPE",
-    "BRAND","MODEL","PROFILE","CUSTODIAN NAME","CSM","SSOE LOCATION","STATUS"
+    "ADMIN INSTALLED","ACAD INSTALLED","ADMIN SCCM EPP > 4 WKS","ACAD SCCM EPP > 4 WKS",
+    "ADMIN NOT CONNECTED","ACAD NOT CONNECTED","ADMIN REQUIRED","ACAD REQUIRED",
+    "ADMIN UNKNOWN","ACAD UNKNOWN","E-EXAM","FAULTY","TECH REFRESH","PERCENTAGE"
 ]
 
 @st.cache_data(ttl=300)
@@ -32,8 +33,8 @@ def get_sheet_right_of_summary():
     for i, s in enumerate(sheets):
         if s["name"].strip().lower() == "summary":
             # pick the one immediately after Summary
-            if i+1 < len(sheets):
-                return sheets[i+1]["gid"], sheets[i+1]["name"]
+            if i + 1 < len(sheets):
+                return sheets[i + 1]["gid"], sheets[i + 1]["name"]
             else:
                 return None, "No worksheet right of Summary"
 
@@ -52,9 +53,8 @@ def load_target_sheet():
     df.columns = df.columns.astype(str).str.strip().str.upper()
 
     if not all(h in df.columns for h in REQUIRED_HEADERS):
-        st.error(f"❌ Required headers missing in {sheet_name}")
+        st.warning(f"⚠️ Headers differ in {sheet_name}. Showing available columns.")
         st.write(df.columns.tolist())
-        st.stop()
 
     return df, sheet_name
 

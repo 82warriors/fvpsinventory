@@ -6,14 +6,13 @@ import re
 st.set_page_config(page_title="Patching Report", layout="wide")
 
 st.title("🛠️ Patching Report")
-st.caption("Always pulls the latest worksheet for raw data, summary calculated separately")
+st.caption("Always pulls the latest worksheet tab and shows raw data only")
 
 SPREADSHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
 
 REQUIRED_HEADERS = [
-    "ADMIN INSTALLED","ACAD INSTALLED","ADMIN SCCM EPP > 4 WKS","ACAD SCCM EPP > 4 WKS",
-    "ADMIN NOT CONNECTED","ACAD NOT CONNECTED","ADMIN REQUIRED","ACAD REQUIRED",
-    "ADMIN UNKNOWN","ACAD UNKNOWN","E-EXAM","FAULTY","TECH REFRESH","PERCENTAGE"
+    "ASSET TAG","SERIAL NUMBER","SCHOOL","HOSTNAME","DEVICE TYPE",
+    "BRAND","MODEL","PROFILE","CUSTODIAN NAME","CSM","SSOE LOCATION","STATUS"
 ]
 
 @st.cache_data(ttl=300)
@@ -50,40 +49,8 @@ def load_latest_sheet():
 
 # 🚀 Load data
 df, sheet_name = load_latest_sheet()
-st.info(f"📄 Using latest worksheet: {sheet_name}")
+st.info(f"📄 Showing latest worksheet: {sheet_name}")
 
-# Raw data
+# Raw data only
 st.markdown("## 🗂️ Full Data (Latest Worksheet)")
 st.dataframe(df, use_container_width=True)
-
-# Convert numeric columns
-for col in REQUIRED_HEADERS:
-    if col != "PERCENTAGE":
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
-
-df["PERCENTAGE"] = pd.to_numeric(df["PERCENTAGE"], errors="coerce").fillna(0)
-
-# Summary totals
-totals = df[REQUIRED_HEADERS].sum()
-
-st.markdown("## 📊 Overview Totals")
-c1, c2, c3 = st.columns(3)
-c1.metric("✅ Admin Installed", int(totals["ADMIN INSTALLED"]))
-c2.metric("✅ Acad Installed", int(totals["ACAD INSTALLED"]))
-c3.metric("📈 Avg Completion %", f"{df['PERCENTAGE'].mean():.1f}%")
-
-# Summary table
-st.markdown("## 📋 Patching Summary")
-summary_table = pd.DataFrame(totals).reset_index()
-summary_table.columns = ["Category","Count"]
-st.dataframe(summary_table, use_container_width=True, hide_index=True)
-
-# Chart
-st.markdown("## 📈 Patching Distribution")
-st.bar_chart(summary_table.set_index("Category"))
-
-# Progress bars
-st.markdown("## 🔄 Completion Progress")
-for i, row in df.iterrows():
-    st.write(f"Row {i+1}")
-    st.progress(row["PERCENTAGE"]/100)

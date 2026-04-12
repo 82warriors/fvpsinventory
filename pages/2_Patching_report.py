@@ -14,15 +14,14 @@ st.title("🛠 Patching Report")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # ==================================================
-# LOAD ALL WORKSHEETS 🔥
+# LOAD ALL WORKSHEETS
 # ==================================================
 @st.cache_data(ttl=120)
 def load_all_sheets():
-    spreadsheet = conn.open()  # open full workbook
-
+    spreadsheet = conn.open()
     all_dfs = []
 
-    for ws in spreadsheet.worksheets():  # 🔥 key part
+    for ws in spreadsheet.worksheets():
         df = ws.get_as_df()
 
         if df.empty:
@@ -30,20 +29,17 @@ def load_all_sheets():
 
         df.columns = df.columns.str.strip()
 
-        # Skip sheets without required structure
         required_cols = {"BrandModel", "Profile", "Status"}
         if not required_cols.issubset(df.columns):
             continue
 
-        df["SOURCE_SHEET"] = ws.title  # track source
+        df["SOURCE_SHEET"] = ws.title
         all_dfs.append(df)
 
     if not all_dfs:
         return pd.DataFrame()
 
-    combined = pd.concat(all_dfs, ignore_index=True)
-    return combined
-
+    return pd.concat(all_dfs, ignore_index=True)
 
 # ==================================================
 # LOAD DATA
@@ -51,7 +47,7 @@ def load_all_sheets():
 df = load_all_sheets()
 
 # ==================================================
-# REFRESH
+# REFRESH BUTTON
 # ==================================================
 if st.button("🔄 Refresh Data"):
     st.cache_data.clear()
@@ -72,25 +68,35 @@ df["Profile"] = df["Profile"].astype(str).str.upper().str.strip()
 df["Status"] = df["Status"].astype(str).str.upper().str.strip()
 
 # ==================================================
+# FILTER HELPERS (Reusable 🔥)
+# ==================================================
+def count_devices(model_keyword=None, profile=None, status=None):
+    filtered = df.copy()
+
+    if model_keyword:
+        filtered = filtered[filtered["BrandModel"].str.contains(model_keyword, na=False)]
+
+    if profile:
+        filtered = filtered[filtered["Profile"] == profile]
+
+    if status:
+        filtered = filtered[filtered["Status"] == status]
+
+    return filtered.shape[0]
+
+# ==================================================
 # KPI CALCULATIONS
 # ==================================================
 st.markdown("## 📊 Overview")
 
-is_yoga = df["BrandModel"].str.contains("YOGA L13", na=False)
-is_k14 = df["BrandModel"].str.contains("K14 GEN2", na=False)
+total_admin = count_devices("YOGA L13", "ADMIN")
+total_admin_patched = count_devices("YOGA L13", "ADMIN", "INSTALLED")
 
-is_admin = df["Profile"] == "ADMIN"
-is_acad = df["Profile"] == "ACAD"
-is_installed = df["Status"] == "INSTALLED"
+total_acad = count_devices("K14 GEN2", "ACAD")
+total_acad_patched = count_devices("K14 GEN2", "ACAD", "INSTALLED")
 
-total_admin = df[is_yoga].shape[0]
-total_admin_patched = df[is_yoga & is_admin & is_installed].shape[0]
-
-total_acad = df[is_k14 & is_acad].shape[0]
-total_acad_patched = df[is_k14 & is_acad & is_installed].shape[0]
-
-total_shared_admin = df[is_k14 & is_admin].shape[0]
-total_shared_admin_patched = df[is_k14 & is_admin & is_installed].shape[0]
+total_shared_admin = count_devices("K14 GEN2", "ADMIN")
+total_shared_admin_patched = count_devices("K14 GEN2", "ADMIN", "INSTALLED")
 
 # ==================================================
 # DISPLAY KPIs
@@ -110,13 +116,32 @@ with col3:
     st.metric("Shared Admin Patched", total_shared_admin_patched)
 
 # ==================================================
-# SHOW SOURCE SHEETS (DEBUG 🔥)
+# OPTIONAL: PATCH RATE (🔥 nice insight)
+# ==================================================
+st.markdown("## 📈 Patch Rates")
+
+def rate(patched, total):
+    return f"{(patched / total * 100):.1f}%" if total else "0%"
+
+col4, col5, col6 = st.columns(3)
+
+with col4:
+    st.metric("Admin Patch Rate", rate(total_admin_patched, total_admin))
+
+with col5:
+    st.metric("Acad Patch Rate", rate(total_acad_patched, total_acad))
+
+with col6:
+    st.metric("Shared Admin Patch Rate", rate(total_shared_admin_patched, total_shared_admin))
+
+# ==================================================
+# DEBUG: SOURCE SHEETS
 # ==================================================
 st.markdown("### 📂 Sheets Loaded")
 st.write(df["SOURCE_SHEET"].unique())
 
 # ==================================================
-# TABLE
+# TABLE VIEW
 # ==================================================
 st.markdown("## 📋 Combined Data")
 st.dataframe(df, use_container_width=True, height=600)

@@ -68,7 +68,7 @@ df["Profile"] = df["Profile"].astype(str).str.upper().str.strip()
 df["Status"] = df["Status"].astype(str).str.upper().str.strip()
 
 # ==================================================
-# FILTER HELPERS (Reusable 🔥)
+# FILTER HELPER
 # ==================================================
 def count_devices(model_keyword=None, profile=None, status=None):
     filtered = df.copy()
@@ -89,13 +89,22 @@ def count_devices(model_keyword=None, profile=None, status=None):
 # ==================================================
 st.markdown("## 📊 Overview")
 
+# 1. Total Admin (Yoga L13 only)
 total_admin = count_devices("YOGA L13", "ADMIN")
+
+# 2. Total Admin Patched (Yoga L13, Admin, Installed)
 total_admin_patched = count_devices("YOGA L13", "ADMIN", "INSTALLED")
 
+# 3. Total Acad (K14 Gen2, Acad)
 total_acad = count_devices("K14 GEN2", "ACAD")
+
+# 4. Total Acad Patched (K14 Gen2, Acad, Installed)
 total_acad_patched = count_devices("K14 GEN2", "ACAD", "INSTALLED")
 
+# 5. Total Shared Admin (K14 Gen2, Admin)
 total_shared_admin = count_devices("K14 GEN2", "ADMIN")
+
+# 6. Total Shared Admin Patched (K14 Gen2, Admin, Installed)
 total_shared_admin_patched = count_devices("K14 GEN2", "ADMIN", "INSTALLED")
 
 # ==================================================
@@ -112,11 +121,11 @@ with col2:
     st.metric("Acad Patched", total_acad_patched)
 
 with col3:
-    st.metric("Total Shared Admin", total_shared_admin)
+    st.metric("Total Shared Admin (K14 Gen2)", total_shared_admin)
     st.metric("Shared Admin Patched", total_shared_admin_patched)
 
 # ==================================================
-# OPTIONAL: PATCH RATE (🔥 nice insight)
+# PATCH RATES
 # ==================================================
 st.markdown("## 📈 Patch Rates")
 

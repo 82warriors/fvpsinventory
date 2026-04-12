@@ -168,8 +168,8 @@ for _, row in summary.iterrows():
 # ==================================================
 # RAW DATA
 # ==================================================
-with st.expander("🔍 View Raw Data"):
-    st.dataframe(df, use_container_width=True)
+st.markdown("## 🗂️ Full Updated Data")
+st.dataframe(df, use_container_width=True)
 
 # ==================================================
 # REFRESH

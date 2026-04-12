@@ -29,7 +29,7 @@ def get_latest_sheet():
         # filter out any tab called "Summary"
         filtered = [s for s in sheets if s["name"].strip().lower() != "summary"]
         if filtered:
-            latest = filtered[-1]  # last non-summary tab
+            latest = filtered[-1]  # newest non-summary tab
             return latest["gid"], latest["name"]
     return None, "No valid worksheet"
 

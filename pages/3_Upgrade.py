@@ -9,7 +9,7 @@ import re
 st.set_page_config(page_title="Upgrade Tracking", layout="wide")
 
 st.title("⬆️ Upgrade Status Dashboard")
-st.caption("Automatically uses the latest worksheet")
+st.caption("Always pulls the latest worksheet for raw data, summary calculated separately")
 
 # ==================================================
 # CONFIG
@@ -96,20 +96,19 @@ df, sheet_name = load_latest_sheet()
 st.info(f"📄 Using latest sheet: {sheet_name}")
 
 # ==================================================
-# CLEAN DATA
+# RAW DATA (always latest)
+# ==================================================
+st.markdown("## 🗂️ Full Updated Data (Latest Worksheet)")
+st.dataframe(df, use_container_width=True)
+
+# ==================================================
+# SUMMARY (calculated separately)
 # ==================================================
 df["MODEL"] = df["MODEL"].astype(str).str.upper().str.strip()
 df["IPU STATUS"] = df["IPU STATUS"].astype(str).str.title().str.strip()
-
-# ==================================================
-# FILTER TARGET MODELS
-# ==================================================
 df = df[df["MODEL"].isin(TARGET_MODELS)]
 df = df.dropna(subset=["MODEL"])
 
-# ==================================================
-# SUMMARY
-# ==================================================
 summary = (
     df.groupby(["MODEL", "IPU STATUS"])
     .size()
@@ -128,8 +127,7 @@ summary["Completion %"] = summary["Completion %"].round(1)
 # ==================================================
 # KPI
 # ==================================================
-st.markdown("## 📊 Overview")
-
+st.markdown("## 📊 Overview (Summary)")
 completed = int(summary["Completed"].sum())
 not_completed = int(summary["Not Completed"].sum())
 total = completed + not_completed
@@ -164,12 +162,6 @@ st.markdown("## 🔄 Progress by Model")
 for _, row in summary.iterrows():
     st.write(f"**{row['MODEL']}**")
     st.progress(row["Completion %"] / 100)
-
-# ==================================================
-# RAW DATA
-# ==================================================
-st.markdown("## 🗂️ Full Updated Data")
-st.dataframe(df, use_container_width=True)
 
 # ==================================================
 # REFRESH

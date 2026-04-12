@@ -12,7 +12,7 @@ SPREADSHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
 
 @st.cache_data(ttl=300)
 def get_sheets():
-    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
+    url = f"https://docs.google.com/spreadsheets/d/1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
     html = requests.get(url).text
     matches = re.findall(r'"sheetId":(\d+).*?"title":"(.*?)"', html)
     return [{"gid": gid, "name": name} for gid, name in matches]

@@ -25,13 +25,19 @@ def get_sheets():
 @st.cache_data(ttl=300)
 def get_latest_sheet():
     sheets = get_sheets()
-    if sheets:
-        # filter out any tab called "Summary"
-        filtered = [s for s in sheets if s["name"].strip().lower() != "summary"]
-        if filtered:
-            latest = filtered[-1]  # newest non-summary tab
-            return latest["gid"], latest["name"]
-    return None, "No valid worksheet"
+    if not sheets:
+        return None, "No worksheets at all"
+
+    # filter out Summary tabs
+    filtered = [s for s in sheets if s["name"].strip().lower() != "summary"]
+
+    if filtered:
+        latest = filtered[-1]  # newest non-summary tab
+        return latest["gid"], latest["name"]
+    else:
+        # fallback: use the last tab even if it's Summary
+        latest = sheets[-1]
+        return latest["gid"], latest["name"]
 
 def load_latest_sheet():
     gid, sheet_name = get_latest_sheet()
@@ -52,10 +58,10 @@ def load_latest_sheet():
 
 # 🚀 Load data
 df, sheet_name = load_latest_sheet()
-st.info(f"📄 Showing latest worksheet: {sheet_name}")
+st.info(f"📄 Showing worksheet: {sheet_name}")
 
 # Raw data only
-st.markdown("## 🗂️ Full Data (Latest Worksheet)")
+st.markdown("## 🗂️ Full Data (Worksheet)")
 st.dataframe(df, use_container_width=True)
 
 # 🔄 Refresh button

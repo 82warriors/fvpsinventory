@@ -3,130 +3,87 @@ import pandas as pd
 import requests
 import re
 
-# ==================================================
-# PAGE CONFIG
-# ==================================================
 st.set_page_config(page_title="Patching Report", layout="wide")
-st.title("🛠 Patching Report")
 
-# ==================================================
-# GOOGLE SHEET CONFIG
-# ==================================================
-SHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
+st.title("🛠️ Patching Report")
+st.caption("Always pulls the latest worksheet for raw data, summary calculated separately")
 
-# ==================================================
-# LOAD ALL WORKSHEETS (always includes new ones)
-# ==================================================
-@st.cache_data(ttl=120)
-def load_all_sheets():
-    # Get spreadsheet metadata (list of sheets)
-    meta_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?"
-    meta_text = requests.get(meta_url).text
+SPREADSHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
 
-    # Extract sheet names with regex
-    sheet_names = re.findall(r'"(.*?)"', meta_text)
-    all_dfs = []
+REQUIRED_HEADERS = [
+    "ADMIN INSTALLED","ACAD INSTALLED","ADMIN SCCM EPP > 4 WKS","ACAD SCCM EPP > 4 WKS",
+    "ADMIN NOT CONNECTED","ACAD NOT CONNECTED","ADMIN REQUIRED","ACAD REQUIRED",
+    "ADMIN UNKNOWN","ACAD UNKNOWN","E-EXAM","FAULTY","TECH REFRESH","PERCENTAGE"
+]
 
-    for sheet_name in sheet_names:
-        try:
-            url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
-            df = pd.read_csv(url)
-            if df.empty:
-                continue
-            df.columns = df.columns.str.strip()
-            required_cols = {"BrandModel", "Profile", "Status"}
-            if not required_cols.issubset(df.columns):
-                continue
-            df["SOURCE_SHEET"] = sheet_name
-            all_dfs.append(df)
-        except Exception:
-            continue
+@st.cache_data(ttl=300)
+def get_sheets():
+    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
+    html = requests.get(url).text
+    matches = re.findall(r'"sheetId":(\d+).*?"title":"(.*?)"', html)
+    return [{"gid": gid, "name": name} for gid, name in matches]
 
-    if not all_dfs:
-        return pd.DataFrame()
-    return pd.concat(all_dfs, ignore_index=True)
+@st.cache_data(ttl=300)
+def get_latest_sheet():
+    sheets = get_sheets()
+    if sheets:
+        latest = sheets[-1]  # newest tab
+        return latest["gid"], latest["name"]
+    return None, "Default Sheet"
 
-# ==================================================
-# LOAD DATA
-# ==================================================
-df = load_all_sheets()
+def load_latest_sheet():
+    gid, sheet_name = get_latest_sheet()
+    if gid is None:
+        st.error("❌ No worksheets found")
+        st.stop()
 
-if df.empty:
-    st.error("❌ No valid data found in any worksheet")
-    st.stop()
+    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid={gid}"
+    df = pd.read_csv(url, dtype=str)
+    df.columns = df.columns.astype(str).str.strip().str.upper()
 
-# ==================================================
-# CLEAN DATA
-# ==================================================
-df["BrandModel"] = df["BrandModel"].astype(str).str.upper().str.strip()
-df["Profile"] = df["Profile"].astype(str).str.upper().str.strip()
-df["Status"] = df["Status"].astype(str).str.upper().str.strip()
+    if not all(h in df.columns for h in REQUIRED_HEADERS):
+        st.error(f"❌ Required headers missing in {sheet_name}")
+        st.write(df.columns.tolist())
+        st.stop()
 
-# ==================================================
-# FILTER HELPER
-# ==================================================
-def count_devices(model_keyword=None, profile=None, status=None):
-    filtered = df.copy()
-    if model_keyword:
-        filtered = filtered[filtered["BrandModel"].str.contains(model_keyword, na=False)]
-    if profile:
-        filtered = filtered[filtered["Profile"] == profile]
-    if status:
-        filtered = filtered[filtered["Status"] == status]
-    return filtered.shape[0]
+    return df, sheet_name
 
-# ==================================================
-# KPI CALCULATIONS
-# ==================================================
-st.markdown("## 📊 Overview")
+# 🚀 Load data
+df, sheet_name = load_latest_sheet()
+st.info(f"📄 Using latest worksheet: {sheet_name}")
 
-total_admin = count_devices("YOGA L13", "ADMIN")
-total_admin_patched = count_devices("YOGA L13", "ADMIN", "INSTALLED")
+# Raw data
+st.markdown("## 🗂️ Full Data (Latest Worksheet)")
+st.dataframe(df, use_container_width=True)
 
-total_acad = count_devices("K14 GEN2", "ACAD")
-total_acad_patched = count_devices("K14 GEN2", "ACAD", "INSTALLED")
+# Convert numeric columns
+for col in REQUIRED_HEADERS:
+    if col != "PERCENTAGE":
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-total_shared_admin = count_devices("K14 GEN2", "ADMIN")
-total_shared_admin_patched = count_devices("K14 GEN2", "ADMIN", "INSTALLED")
+df["PERCENTAGE"] = pd.to_numeric(df["PERCENTAGE"], errors="coerce").fillna(0)
 
-# ==================================================
-# DISPLAY KPIs
-# ==================================================
-col1, col2, col3 = st.columns(3)
+# Summary totals
+totals = df[REQUIRED_HEADERS].sum()
 
-with col1:
-    st.metric("Total Admin (Yoga L13)", total_admin)
-    st.metric("Admin Patched", total_admin_patched)
+st.markdown("## 📊 Overview Totals")
+c1, c2, c3 = st.columns(3)
+c1.metric("✅ Admin Installed", int(totals["ADMIN INSTALLED"]))
+c2.metric("✅ Acad Installed", int(totals["ACAD INSTALLED"]))
+c3.metric("📈 Avg Completion %", f"{df['PERCENTAGE'].mean():.1f}%")
 
-with col2:
-    st.metric("Total Acad (K14 Gen2)", total_acad)
-    st.metric("Acad Patched", total_acad_patched)
+# Summary table
+st.markdown("## 📋 Patching Summary")
+summary_table = pd.DataFrame(totals).reset_index()
+summary_table.columns = ["Category","Count"]
+st.dataframe(summary_table, use_container_width=True, hide_index=True)
 
-with col3:
-    st.metric("Total Shared Admin (K14 Gen2)", total_shared_admin)
-    st.metric("Shared Admin Patched", total_shared_admin_patched)
+# Chart
+st.markdown("## 📈 Patching Distribution")
+st.bar_chart(summary_table.set_index("Category"))
 
-# ==================================================
-# PATCH RATES
-# ==================================================
-st.markdown("## 📈 Patch Rates")
-
-def rate(patched, total):
-    return f"{(patched / total * 100):.1f}%" if total else "0%"
-
-col4, col5, col6 = st.columns(3)
-
-with col4:
-    st.metric("Admin Patch Rate", rate(total_admin_patched, total_admin))
-
-with col5:
-    st.metric("Acad Patch Rate", rate(total_acad_patched, total_acad))
-
-with col6:
-    st.metric("Shared Admin Patch Rate", rate(total_shared_admin_patched, total_shared_admin))
-
-# ==================================================
-# TABLE VIEW
-# ==================================================
-st.markdown("## 📋 Combined Data")
-st.dataframe(df, use_container_width=True, height=600)
+# Progress bars
+st.markdown("## 🔄 Completion Progress")
+for i, row in df.iterrows():
+    st.write(f"Row {i+1}")
+    st.progress(row["PERCENTAGE"]/100)

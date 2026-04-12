@@ -64,11 +64,11 @@ def load_latest_sheet():
 
     raw = pd.read_csv(url, header=None, dtype=str)
 
-    # detect header row
+    # detect header row by checking required headers
     header_row = None
     for i in range(len(raw)):
         row = raw.iloc[i].astype(str).str.upper()
-        if "MODEL" in row.values and "IPU STATUS" in row.values:
+        if all(h in row.values for h in REQUIRED_HEADERS):
             header_row = i
             break
 

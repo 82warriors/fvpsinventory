@@ -10,12 +10,6 @@ st.caption("Loads the worksheet immediately to the right of 'Summary' and shows 
 
 SPREADSHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
 
-REQUIRED_HEADERS = [
-    "ADMIN INSTALLED","ACAD INSTALLED","ADMIN SCCM EPP > 4 WKS","ACAD SCCM EPP > 4 WKS",
-    "ADMIN NOT CONNECTED","ACAD NOT CONNECTED","ADMIN REQUIRED","ACAD REQUIRED",
-    "ADMIN UNKNOWN","ACAD UNKNOWN","E-EXAM","FAULTY","TECH REFRESH","PERCENTAGE"
-]
-
 @st.cache_data(ttl=300)
 def get_sheets():
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
@@ -29,14 +23,12 @@ def get_sheet_right_of_summary():
     if not sheets:
         return None, "No worksheets at all"
 
-    # find index of Summary
     for i, s in enumerate(sheets):
         if s["name"].strip().lower() == "summary":
-            # pick the one immediately after Summary
             if i + 1 < len(sheets):
                 return sheets[i + 1]["gid"], sheets[i + 1]["name"]
             else:
-                return None, "No worksheet right of Summary"
+                return sheets[-1]["gid"], sheets[-1]["name"]
 
     # if Summary not found, fallback to last tab
     latest = sheets[-1]
@@ -51,10 +43,6 @@ def load_target_sheet():
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid={gid}"
     df = pd.read_csv(url, dtype=str)
     df.columns = df.columns.astype(str).str.strip().str.upper()
-
-    if not all(h in df.columns for h in REQUIRED_HEADERS):
-        st.warning(f"⚠️ Headers differ in {sheet_name}. Showing available columns.")
-        st.write(df.columns.tolist())
 
     return df, sheet_name
 

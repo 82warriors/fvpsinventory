@@ -19,7 +19,7 @@ SPREADSHEET_ID = "1x4EP6dO3FpkFRMBXqHDku0pl4vtHrWnE1S3J-e86vt0"
 REQUIRED_HEADERS = [
     "SCHOOL NAME", "HOSTNAME", "SERIAL NUMBER", "ASSET TAG",
     "CUSTODIAN", "LOCATION", "BRAND", "MODEL",
-    "CATEGORY", "EOL STATUS"
+    "CATEGORY", "IPU STATUS", "EOL STATUS"
 ]
 
 TARGET_MODELS = [
@@ -105,19 +105,15 @@ st.dataframe(df, use_container_width=True)
 # SUMMARY (calculated separately)
 # ==================================================
 df["MODEL"] = df["MODEL"].astype(str).str.upper().str.strip()
-df["EOL STATUS"] = df["EOL STATUS"].astype(str).str.title().str.strip()
+df["IPU STATUS"] = df["IPU STATUS"].astype(str).str.title().str.strip()
 df = df[df["MODEL"].isin(TARGET_MODELS)]
 df = df.dropna(subset=["MODEL"])
 
-# Treat EOL STATUS as completion indicator
 summary = (
-    df.groupby(["MODEL", "EOL STATUS"])
+    df.groupby(["MODEL", "IPU STATUS"])
     .size()
     .unstack(fill_value=0)
 )
-
-# Normalize columns: assume "Active" = Completed, "Retired" = Not Completed
-summary = summary.rename(columns={"Active": "Completed", "Retired": "Not Completed"})
 
 for col in ["Completed", "Not Completed"]:
     if col not in summary.columns:

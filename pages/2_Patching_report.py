@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
-from streamlit_gsheets import GSheetsConnection
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 # ==================================================
 # PAGE CONFIG
@@ -9,35 +10,38 @@ st.set_page_config(page_title="Patching Report", layout="wide")
 st.title("🛠 Patching Report")
 
 # ==================================================
-# CONNECT TO GOOGLE SHEETS
+# CONNECT TO GOOGLE SHEETS (without secrets.toml)
 # ==================================================
-conn = st.connection("gsheets", type=GSheetsConnection)
+# If your sheet is public, you can use gspread with a URL.
+# If private, you’ll need a service account JSON file.
+scope = ["https://spreadsheets.google.com/feeds",
+         "https://www.googleapis.com/auth/drive"]
+
+# Replace with path to your service account JSON file
+creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
+client = gspread.authorize(creds)
+
+# Replace with your spreadsheet name
+spreadsheet = client.open("YourSpreadsheetName")
 
 # ==================================================
 # LOAD ALL WORKSHEETS
 # ==================================================
 @st.cache_data(ttl=120)
 def load_all_sheets():
-    # Read all worksheets into a dictionary of DataFrames
-    all_sheets = conn.read()
     all_dfs = []
-
-    for sheet_name, df in all_sheets.items():
+    for ws in spreadsheet.worksheets():
+        df = pd.DataFrame(ws.get_all_records())
         if df.empty:
             continue
-
         df.columns = df.columns.str.strip()
-
         required_cols = {"BrandModel", "Profile", "Status"}
         if not required_cols.issubset(df.columns):
             continue
-
-        df["SOURCE_SHEET"] = sheet_name
+        df["SOURCE_SHEET"] = ws.title
         all_dfs.append(df)
-
     if not all_dfs:
         return pd.DataFrame()
-
     return pd.concat(all_dfs, ignore_index=True)
 
 # ==================================================
@@ -45,16 +49,6 @@ def load_all_sheets():
 # ==================================================
 df = load_all_sheets()
 
-# ==================================================
-# REFRESH BUTTON
-# ==================================================
-if st.button("🔄 Refresh Data"):
-    st.cache_data.clear()
-    st.rerun()
-
-# ==================================================
-# VALIDATION
-# ==================================================
 if df.empty:
     st.error("❌ No valid data found in any worksheet")
     st.stop()
@@ -71,16 +65,12 @@ df["Status"] = df["Status"].astype(str).str.upper().str.strip()
 # ==================================================
 def count_devices(model_keyword=None, profile=None, status=None):
     filtered = df.copy()
-
     if model_keyword:
         filtered = filtered[filtered["BrandModel"].str.contains(model_keyword, na=False)]
-
     if profile:
         filtered = filtered[filtered["Profile"] == profile]
-
     if status:
         filtered = filtered[filtered["Status"] == status]
-
     return filtered.shape[0]
 
 # ==================================================
@@ -132,12 +122,6 @@ with col5:
 
 with col6:
     st.metric("Shared Admin Patch Rate", rate(total_shared_admin_patched, total_shared_admin))
-
-# ==================================================
-# DEBUG: SOURCE SHEETS
-# ==================================================
-st.markdown("### 📂 Sheets Loaded")
-st.write(df["SOURCE_SHEET"].unique())
 
 # ==================================================
 # TABLE VIEW

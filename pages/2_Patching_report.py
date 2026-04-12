@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
-import gspread
+import requests
+import re
 
 # ==================================================
 # PAGE CONFIG
@@ -9,27 +10,38 @@ st.set_page_config(page_title="Patching Report", layout="wide")
 st.title("🛠 Patching Report")
 
 # ==================================================
-# CONNECT TO PUBLIC GOOGLE SHEET
+# GOOGLE SHEET CONFIG
 # ==================================================
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE/edit#gid=0"
-
+SHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
 
 # ==================================================
 # LOAD ALL WORKSHEETS (always includes new ones)
 # ==================================================
 @st.cache_data(ttl=120)
 def load_all_sheets():
+    # Get spreadsheet metadata (list of sheets)
+    meta_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?"
+    meta_text = requests.get(meta_url).text
+
+    # Extract sheet names with regex
+    sheet_names = re.findall(r'"(.*?)"', meta_text)
     all_dfs = []
-    for ws in spreadsheet.worksheets():
-        df = pd.DataFrame(ws.get_all_records())
-        if df.empty:
+
+    for sheet_name in sheet_names:
+        try:
+            url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+            df = pd.read_csv(url)
+            if df.empty:
+                continue
+            df.columns = df.columns.str.strip()
+            required_cols = {"BrandModel", "Profile", "Status"}
+            if not required_cols.issubset(df.columns):
+                continue
+            df["SOURCE_SHEET"] = sheet_name
+            all_dfs.append(df)
+        except Exception:
             continue
-        df.columns = df.columns.str.strip()
-        required_cols = {"BrandModel", "Profile", "Status"}
-        if not required_cols.issubset(df.columns):
-            continue
-        df["SOURCE_SHEET"] = ws.title
-        all_dfs.append(df)
+
     if not all_dfs:
         return pd.DataFrame()
     return pd.concat(all_dfs, ignore_index=True)

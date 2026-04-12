@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 
 # ==================================================
 # PAGE CONFIG
@@ -10,22 +9,15 @@ st.set_page_config(page_title="Patching Report", layout="wide")
 st.title("🛠 Patching Report")
 
 # ==================================================
-# CONNECT TO GOOGLE SHEETS (without secrets.toml)
+# CONNECT TO PUBLIC GOOGLE SHEET
 # ==================================================
-# If your sheet is public, you can use gspread with a URL.
-# If private, you’ll need a service account JSON file.
-scope = ["https://spreadsheets.google.com/feeds",
-         "https://www.googleapis.com/auth/drive"]
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE/edit#gid=0"
 
-# Replace with path to your service account JSON file
-creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
-client = gspread.authorize(creds)
-
-# Replace with your spreadsheet name
-spreadsheet = client.open("YourSpreadsheetName")
+client = gspread.Client(None)  # no credentials needed for public sheets
+spreadsheet = client.open_by_url(SHEET_URL)
 
 # ==================================================
-# LOAD ALL WORKSHEETS
+# LOAD ALL WORKSHEETS (always includes new ones)
 # ==================================================
 @st.cache_data(ttl=120)
 def load_all_sheets():

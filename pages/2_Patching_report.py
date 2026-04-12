@@ -40,7 +40,7 @@ def load_target_sheet():
         st.error("❌ Could not find a worksheet right of Summary")
         st.stop()
 
-    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid={gid}"
+    url = f"https://docs.google.com/spreadsheets/d/1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE/export?format=csv&gid={gid}"
     df = pd.read_csv(url, dtype=str)
     df.columns = df.columns.astype(str).str.strip().str.upper()
 
@@ -48,7 +48,7 @@ def load_target_sheet():
 
 # 🚀 Load data
 df, sheet_name = load_target_sheet()
-st.info(f"📄 Showing worksheet: {sheet_name}")
+st.info(f"📄 Showing worksheet: Summary")
 
 # Raw data only
 st.markdown("## 🗂️ Full Data (Worksheet)")

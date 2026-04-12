@@ -13,8 +13,6 @@ st.title("🛠 Patching Report")
 # ==================================================
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE/edit#gid=0"
 
-client = gspread.Client(None)  # no credentials needed for public sheets
-spreadsheet = client.open_by_url(SHEET_URL)
 
 # ==================================================
 # LOAD ALL WORKSHEETS (always includes new ones)

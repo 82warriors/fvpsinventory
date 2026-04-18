@@ -10,11 +10,11 @@ st.set_page_config(page_title="Patching Report", layout="wide")
 
 SPREADSHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
 
-st.title("🛠️ Patching Report")
-st.caption("Auto-updating dashboard (refresh every 30s)")
+st.title("🛠️ Patching Report Dashboard")
+st.caption("Live monitoring with charts")
 
 # ==================================================
-# AUTO REFRESH (every 30 sec)
+# AUTO REFRESH (30 sec)
 # ==================================================
 REFRESH_INTERVAL = 30
 
@@ -26,45 +26,31 @@ if time.time() - st.session_state.last_refresh > REFRESH_INTERVAL:
     st.rerun()
 
 # ==================================================
-# GET META (A1 header, A2 value)
+# GET META
 # ==================================================
 @st.cache_data(ttl=30)
 def get_latest_sheet():
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=META"
-
     df = pd.read_csv(url, header=None)
 
     if df.shape[0] < 2:
-        raise Exception("META sheet missing data")
+        raise Exception("META missing data")
 
-    sheet_name = str(df.iloc[1, 0]).strip()
-
-    if not sheet_name or sheet_name.lower() == "none":
-        raise Exception("LatestSheet is empty")
-
-    return sheet_name
+    return str(df.iloc[1, 0]).strip()
 
 # ==================================================
-# LOAD SHEET (FIXED VERSION)
+# LOAD SHEET
 # ==================================================
 @st.cache_data(ttl=30)
 def load_sheet(sheet_name):
-    encoded_name = urllib.parse.quote(sheet_name)
+    encoded = urllib.parse.quote(sheet_name)
+    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={encoded}"
 
-    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={encoded_name}"
-
-    try:
-        df = pd.read_csv(url, dtype=str)
-    except Exception as e:
-        raise Exception(f"Failed to read sheet '{sheet_name}': {e}")
-
-    if not isinstance(df, pd.DataFrame):
-        raise Exception("Invalid data returned (not DataFrame)")
+    df = pd.read_csv(url, dtype=str)
 
     if df.empty:
-        raise Exception(f"Sheet '{sheet_name}' is empty or inaccessible")
+        raise Exception("Sheet empty")
 
-    # ✅ SAFE CLEANING (no applymap)
     df.columns = df.columns.str.strip().str.upper()
 
     for col in df.columns:
@@ -73,62 +59,105 @@ def load_sheet(sheet_name):
     return df
 
 # ==================================================
-# SUMMARY CALCULATION
+# LOAD SUMMARY (FOR TREND)
 # ==================================================
-def calculate_summary(df):
-    keys = [
-        "ADMIN INSTALLED","ACAD INSTALLED",
-        "ADMIN NOT CONNECTED","ACAD NOT CONNECTED",
-        "ADMIN REQUIRED","ACAD REQUIRED",
-        "ADMIN UNKNOWN","ACAD UNKNOWN",
-        "E-EXAM","FAULTY"
+@st.cache_data(ttl=60)
+def load_summary():
+    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Summary"
+    df = pd.read_csv(url)
+
+    df.columns = df.columns.str.strip().str.upper()
+    return df
+
+# ==================================================
+# DEVICE STATUS COUNT
+# ==================================================
+def device_status_count(df):
+    devices = [
+        "LENOVO K14 GEN2",
+        "LENOVO L13 YOGA G4",
+        "ACER VX2670G DESKTOP"
     ]
 
-    summary = {k: 0 for k in keys}
+    statuses = [
+        "INSTALLED",
+        "SCCM EPP > 4 WKS",
+        "NOT CONNECTED",
+        "REQUIRED"
+    ]
 
-    for col in df.columns:
-        for key in keys:
-            if key in col:
-                summary[key] += pd.to_numeric(df[col], errors="coerce").fillna(0).sum()
+    result = []
 
-    return summary
+    for device in devices:
+        row = {"Device": device.title()}
+
+        for status in statuses:
+            count = df[
+                (df.iloc[:, 6].str.upper() == device) &
+                (df.iloc[:, 11].str.upper() == status)
+            ].shape[0]
+
+            row[status] = count
+
+        result.append(row)
+
+    return pd.DataFrame(result)
 
 # ==================================================
 # MAIN LOAD
 # ==================================================
 try:
     sheet_name = get_latest_sheet()
-    st.info(f"📡 Latest sheet detected: {sheet_name}")
-
     df = load_sheet(sheet_name)
 
+    st.success(f"📅 Latest: {sheet_name}")
+
 except Exception as e:
-    st.error("❌ Failed to load data")
+    st.error("❌ Load error")
     st.exception(e)
     st.stop()
 
 # ==================================================
-# METRICS
+# DEVICE TABLE
 # ==================================================
-summary = calculate_summary(df)
+device_df = device_status_count(df)
 
-installed = summary["ADMIN INSTALLED"] + summary["ACAD INSTALLED"]
-total = sum(summary.values())
-percent = (installed / total * 100) if total else 0
-
-col1, col2, col3 = st.columns(3)
-
-col1.metric("Installed", int(installed))
-col2.metric("Total Devices", int(total))
-col3.metric("Patching %", f"{percent:.2f}%")
-
-st.divider()
+st.subheader("💻 Device Status Breakdown")
+st.dataframe(device_df, use_container_width=True)
 
 # ==================================================
-# BREAKDOWN
+# 📊 BAR CHART
 # ==================================================
-st.subheader("📊 Breakdown")
-st.dataframe(pd.DataFrame([summary]), use_container_width=True)
+st.subheader("📊 Status Distribution per Device")
+
+chart_df = device_df.set_index("Device")
+
+st.bar_chart(chart_df)
+
+# ==================================================
+# 📈 TREND OVER TIME
+# ==================================================
+st.subheader("📈 Patching Trend Over Time")
+
+try:
+    summary_df = load_summary()
+
+    # Convert percentage
+    summary_df["PERCENTAGE"] = summary_df["PERCENTAGE"].str.replace("%","").astype(float)
+
+    trend_df = summary_df[["DATE", "PERCENTAGE"]].copy()
+
+    trend_df["DATE"] = pd.to_datetime(trend_df["DATE"], errors="coerce")
+
+    trend_df = trend_df.sort_values("DATE")
+
+    trend_df = trend_df.set_index("DATE")
+
+    st.line_chart(trend_df)
+
+except Exception as e:
+    st.warning("⚠️ Trend not available yet")
+    st.exception(e)
 
 # ==================================================
 # RAW DATA

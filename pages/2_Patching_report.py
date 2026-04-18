@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
-import re
+import json
 from datetime import datetime
 
 # ==================================================
@@ -15,95 +15,140 @@ st.caption("Auto-detect latest sheet based on date name")
 SPREADSHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
 
 # ==================================================
-# GET SHEETS (STABLE VERSION)
+# GET SHEETS (RELIABLE METHOD)
 # ==================================================
 @st.cache_data(ttl=300)
 def get_sheets():
-    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit"
-    html = requests.get(url).text
+    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:json"
+    res = requests.get(url)
+    text = res.text
 
-    matches = re.findall(r'"gid":(\d+),"title":"(.*?)"', html)
+    # Extract JSON part safely
+    json_text = text[text.find("{"):text.rfind("}")+1]
+    data = json.loads(json_text)
 
     sheets = []
-    for gid, name in matches:
-        clean_name = name.strip()
-        sheets.append({"gid": gid, "name": clean_name})
+
+    # This gives columns, but we need metadata fallback
+    # So we ALSO use CSV gid probing
+
+    base_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
+
+    # Common gids (fast scan)
+    possible_gids = [0]
+
+    # Add more from heuristic
+    for i in range(1, 20):
+        possible_gids.append(i * 100000000)
+
+    for gid in possible_gids:
+        try:
+            test_url = f"{base_url}/export?format=csv&gid={gid}"
+            df = pd.read_csv(test_url, nrows=1)
+
+            sheets.append({
+                "gid": gid,
+                "name": f"SHEET_{gid}"  # placeholder
+            })
+        except:
+            continue
 
     return sheets
 
 # ==================================================
-# SAFE DATE PARSER
+# MANUAL NAME FIX (IMPORTANT)
+# ==================================================
+# Since Google blocks names, we read from first row instead
+def get_sheet_name_from_data(df):
+    # You may adjust this if your sheet has title row
+    return df.columns[0]
+
+# ==================================================
+# PARSE DATE
 # ==================================================
 def parse_date(name):
-    # Clean weird chars
-    name = name.strip()
-    name = re.sub(r"[^\w\s]", "", name)
-
-    formats = [
-        "%d %B %Y",  # 16 April 2026
-        "%d %b %Y",  # 01 Jan 2026
-    ]
+    formats = ["%d %B %Y", "%d %b %Y"]
 
     for fmt in formats:
         try:
-            return datetime.strptime(name, fmt)
+            return datetime.strptime(name.strip(), fmt)
         except:
             continue
 
     return None
 
 # ==================================================
-# GET LATEST SHEET
+# LOAD & DETECT
 # ==================================================
 @st.cache_data(ttl=300)
-def get_latest_sheet():
-    sheets = get_sheets()
+def detect_latest_sheet():
+    base_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
 
-    valid = []
+    results = []
 
-    for s in sheets:
-        dt = parse_date(s["name"])
-        if dt:
-            valid.append({
-                "gid": s["gid"],
-                "name": s["name"],
-                "date": dt
-            })
+    # Try common gid range
+    for gid in range(0, 2000000000, 100000000):
+        try:
+            url = f"{base_url}/export?format=csv&gid={gid}"
+            df = pd.read_csv(url, dtype=str)
 
-    if not valid:
-        return None, None, sheets
+            # Try infer name from content (fallback)
+            name = str(df.columns[0]).strip()
 
-    valid.sort(key=lambda x: x["date"], reverse=True)
+            dt = parse_date(name)
 
-    return valid[0], valid, sheets
+            if dt:
+                results.append({
+                    "gid": gid,
+                    "name": name,
+                    "date": dt,
+                    "df": df
+                })
+
+        except:
+            continue
+
+    if not results:
+        return None, []
+
+    results.sort(key=lambda x: x["date"], reverse=True)
+
+    return results[0], results
 
 # ==================================================
-# LOAD DATA
+# MAIN
 # ==================================================
-def load_sheet(gid):
-    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid={gid}"
-    df = pd.read_csv(url, dtype=str)
+latest, all_sheets = detect_latest_sheet()
 
-    df.columns = df.columns.str.strip().str.upper()
-    df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
+if latest is None:
+    st.error("❌ Still cannot detect sheets — fallback needed")
+    st.stop()
 
-    return df
+# Dropdown
+names = [s["name"] for s in all_sheets]
+
+selected = st.selectbox("📂 Select Sheet", names)
+
+selected_data = next(s for s in all_sheets if s["name"] == selected)
+
+df = selected_data["df"]
+
+st.success(f"📅 Showing: {selected}")
+
+# ==================================================
+# CLEAN
+# ==================================================
+df.columns = df.columns.str.strip().str.upper()
+df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
 
 # ==================================================
 # SUMMARY
 # ==================================================
 def calculate_summary(df):
     keys = [
-        "ADMIN INSTALLED",
-        "ACAD INSTALLED",
-        "ADMIN NOT CONNECTED",
-        "ACAD NOT CONNECTED",
-        "ADMIN REQUIRED",
-        "ACAD REQUIRED",
-        "ADMIN UNKNOWN",
-        "ACAD UNKNOWN",
-        "E-EXAM",
-        "FAULTY"
+        "ADMIN INSTALLED","ACAD INSTALLED","ADMIN NOT CONNECTED",
+        "ACAD NOT CONNECTED","ADMIN REQUIRED","ACAD REQUIRED",
+        "ADMIN UNKNOWN","ACAD UNKNOWN","E-EXAM","FAULTY"
     ]
 
     summary = {k: 0 for k in keys}
@@ -115,40 +160,15 @@ def calculate_summary(df):
 
     return summary
 
-# ==================================================
-# MAIN
-# ==================================================
-latest, valid_sheets, all_sheets = get_latest_sheet()
-
-if latest is None:
-    st.error("❌ No valid date sheets found")
-    
-    with st.expander("🔍 All detected sheet names"):
-        for s in all_sheets:
-            st.write(f"'{s['name']}'")
-    
-    st.stop()
-
-# Dropdown
-names = [s["name"] for s in valid_sheets]
-
-selected_name = st.selectbox("📂 Select Sheet", names, index=0)
-
-selected_gid = next(s["gid"] for s in valid_sheets if s["name"] == selected_name)
-
-df = load_sheet(selected_gid)
-
-st.success(f"📅 Showing: {selected_name}")
-
-# ==================================================
-# METRICS
-# ==================================================
 summary = calculate_summary(df)
 
 installed = summary["ADMIN INSTALLED"] + summary["ACAD INSTALLED"]
 total = sum(summary.values())
 percent = (installed / total * 100) if total else 0
 
+# ==================================================
+# DISPLAY
+# ==================================================
 col1, col2, col3 = st.columns(3)
 
 col1.metric("Installed", int(installed))
@@ -157,21 +177,11 @@ col3.metric("Patching %", f"{percent:.2f}%")
 
 st.divider()
 
-# ==================================================
-# TABLES
-# ==================================================
 st.subheader("📊 Breakdown")
 st.dataframe(pd.DataFrame([summary]), use_container_width=True)
 
 st.subheader("📄 Raw Data")
 st.dataframe(df, use_container_width=True)
-
-# ==================================================
-# DEBUG
-# ==================================================
-with st.expander("🔍 Debug - All Sheets"):
-    for s in all_sheets:
-        st.write(f"'{s['name']}'")
 
 # ==================================================
 # REFRESH

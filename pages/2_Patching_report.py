@@ -11,7 +11,7 @@ st.set_page_config(page_title="Patching Report", layout="wide")
 SPREADSHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
 
 st.title("🛠️ Patching Report Dashboard")
-st.caption("Device status monitoring (stacked view)")
+st.caption("Live device status monitoring")
 
 # ==================================================
 # AUTO REFRESH (30 sec)
@@ -26,7 +26,7 @@ if time.time() - st.session_state.last_refresh > REFRESH_INTERVAL:
     st.rerun()
 
 # ==================================================
-# GET META
+# GET META (Latest Sheet)
 # ==================================================
 @st.cache_data(ttl=30)
 def get_latest_sheet():
@@ -44,6 +44,7 @@ def get_latest_sheet():
 @st.cache_data(ttl=30)
 def load_sheet(sheet_name):
     encoded = urllib.parse.quote(sheet_name)
+
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={encoded}"
 
     df = pd.read_csv(url, dtype=str)
@@ -59,7 +60,7 @@ def load_sheet(sheet_name):
     return df
 
 # ==================================================
-# DEVICE STATUS COUNT + TOTAL
+# DEVICE STATUS + TOTAL + %
 # ==================================================
 def device_status_count(df):
     devices = [
@@ -91,6 +92,8 @@ def device_status_count(df):
             total += count
 
         row["TOTAL"] = total
+        row["% INSTALLED"] = round((row["INSTALLED"] / total * 100), 1) if total else 0
+
         result.append(row)
 
     return pd.DataFrame(result)
@@ -102,49 +105,49 @@ try:
     sheet_name = get_latest_sheet()
     df = load_sheet(sheet_name)
 
-    st.success(f"📅 Latest: {sheet_name}")
+    st.success(f"📅 Latest Data: {sheet_name}")
 
 except Exception as e:
-    st.error("❌ Load error")
+    st.error("❌ Failed to load data")
     st.exception(e)
     st.stop()
 
 # ==================================================
-# DEVICE TABLE
+# DEVICE TABLE (COMBINED)
 # ==================================================
 device_df = device_status_count(df)
 
-# Clean column order
-device_df = device_df[
-    ["Device", "INSTALLED", "SCCM EPP > 4 WKS", "NOT CONNECTED", "REQUIRED", "TOTAL"]
+# Rename for clean UI
+device_df.columns = [
+    "Device",
+    "Installed",
+    "SCCM > 4 wks",
+    "Not Connected",
+    "Required",
+    "Total",
+    "% Installed"
 ]
 
 st.subheader("💻 Device Status Breakdown")
-st.dataframe(device_df, use_container_width=True)
+
+st.dataframe(
+    device_df.style.highlight_min(subset=["% Installed"], color="salmon"),
+    use_container_width=True
+)
 
 # ==================================================
 # 📊 STACKED BAR CHART
 # ==================================================
-st.subheader("📊 Stacked Status Distribution")
+st.subheader("📊 Status Distribution (Stacked)")
 
 chart_df = device_df.set_index("Device")[[
-    "INSTALLED",
-    "SCCM EPP > 4 WKS",
-    "NOT CONNECTED",
-    "REQUIRED"
+    "Installed",
+    "SCCM > 4 wks",
+    "Not Connected",
+    "Required"
 ]]
 
-st.bar_chart(chart_df)  # 🔥 auto-stacked in Streamlit
-
-# ==================================================
-# OPTIONAL: % INSTALLED
-# ==================================================
-device_df["% INSTALLED"] = (
-    device_df["INSTALLED"] / device_df["TOTAL"] * 100
-).round(1)
-
-st.subheader("📈 Installation Rate (%)")
-st.dataframe(device_df[["Device", "% INSTALLED"]], use_container_width=True)
+st.bar_chart(chart_df)
 
 # ==================================================
 # RAW DATA

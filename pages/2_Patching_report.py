@@ -1,74 +1,54 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta
+import time
 
 # ==================================================
 # CONFIG
 # ==================================================
 st.set_page_config(page_title="Patching Report", layout="wide")
 
-st.title("🛠️ Patching Report")
-st.caption("Auto-detect latest sheet (date-based)")
-
 SPREADSHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
 
-# ==================================================
-# TRY LOAD SHEET BY NAME
-# ==================================================
-def try_load_sheet(sheet_name):
-    try:
-        url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
-        df = pd.read_csv(url, dtype=str)
-        return df
-    except:
-        return None
+st.title("🛠️ Patching Report")
+st.caption("Auto-updating dashboard (no refresh needed)")
 
 # ==================================================
-# FIND VALID SHEETS (LAST 60 DAYS)
+# AUTO REFRESH (every 60 seconds)
 # ==================================================
-@st.cache_data(ttl=300)
-def find_valid_sheets():
-    today = datetime.today()
-    valid = []
+REFRESH_INTERVAL = 60
 
-    for i in range(0, 90):  # check last 90 days
-        d = today - timedelta(days=i)
+if "last_refresh" not in st.session_state:
+    st.session_state.last_refresh = time.time()
 
-        # Try full month format
-        name = d.strftime("%-d %B %Y")  # Linux
-        alt_name = d.strftime("%d %B %Y")  # fallback
-
-        for sheet_name in [name, alt_name]:
-            df = try_load_sheet(sheet_name)
-
-            if df is not None:
-                valid.append({
-                    "name": sheet_name,
-                    "date": d
-                })
-                break
-
-    # remove duplicates
-    unique = {v["name"]: v for v in valid}.values()
-
-    sorted_list = sorted(unique, key=lambda x: x["date"], reverse=True)
-
-    return sorted_list
+if time.time() - st.session_state.last_refresh > REFRESH_INTERVAL:
+    st.session_state.last_refresh = time.time()
+    st.rerun()
 
 # ==================================================
-# LOAD SHEET
+# LOAD META (LATEST SHEET NAME)
 # ==================================================
+@st.cache_data(ttl=60)
+def get_latest_sheet():
+    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=META"
+    df = pd.read_csv(url)
+    return df.iloc[0]["LatestSheet"]
+
+# ==================================================
+# LOAD TARGET SHEET
+# ==================================================
+@st.cache_data(ttl=60)
 def load_sheet(sheet_name):
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
     df = pd.read_csv(url, dtype=str)
 
+    # Clean data
     df.columns = df.columns.str.strip().str.upper()
     df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
 
     return df
 
 # ==================================================
-# SUMMARY
+# SUMMARY CALCULATION
 # ==================================================
 def calculate_summary(df):
     keys = [
@@ -91,19 +71,15 @@ def calculate_summary(df):
 # ==================================================
 # MAIN
 # ==================================================
-valid_sheets = find_valid_sheets()
+try:
+    sheet_name = get_latest_sheet()
+    df = load_sheet(sheet_name)
 
-if not valid_sheets:
-    st.error("❌ No sheets found (check sharing permissions)")
+    st.success(f"📅 Showing: {sheet_name}")
+
+except Exception as e:
+    st.error("❌ Failed to load data")
     st.stop()
-
-sheet_names = [s["name"] for s in valid_sheets]
-
-selected = st.selectbox("📂 Select Sheet", sheet_names, index=0)
-
-df = load_sheet(selected)
-
-st.success(f"📅 Showing: {selected}")
 
 # ==================================================
 # METRICS
@@ -117,23 +93,24 @@ percent = (installed / total * 100) if total else 0
 col1, col2, col3 = st.columns(3)
 
 col1.metric("Installed", int(installed))
-col2.metric("Total", int(total))
+col2.metric("Total Devices", int(total))
 col3.metric("Patching %", f"{percent:.2f}%")
 
 st.divider()
 
 # ==================================================
-# TABLES
+# BREAKDOWN
 # ==================================================
 st.subheader("📊 Breakdown")
 st.dataframe(pd.DataFrame([summary]), use_container_width=True)
 
+# ==================================================
+# RAW DATA
+# ==================================================
 st.subheader("📄 Raw Data")
 st.dataframe(df, use_container_width=True)
 
 # ==================================================
-# REFRESH
+# FOOTER INFO
 # ==================================================
-if st.button("🔄 Refresh"):
-    st.cache_data.clear()
-    st.rerun()
+st.caption("🔄 Auto refresh every 60 seconds")

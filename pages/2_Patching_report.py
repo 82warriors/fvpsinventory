@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import time
 import urllib.parse
+import altair as alt
 
 # ==================================================
 # CONFIG
@@ -11,7 +12,7 @@ st.set_page_config(page_title="Patching Report", layout="wide")
 SPREADSHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
 
 st.title("🛠️ Patching Report Dashboard")
-st.caption("Live device status monitoring")
+st.caption("Live device health monitoring")
 
 # ==================================================
 # AUTO REFRESH (30 sec)
@@ -34,9 +35,14 @@ def get_latest_sheet():
     df = pd.read_csv(url, header=None)
 
     if df.shape[0] < 2:
-        raise Exception("META missing data")
+        raise Exception("META sheet missing data")
 
-    return str(df.iloc[1, 0]).strip()
+    sheet_name = str(df.iloc[1, 0]).strip()
+
+    if not sheet_name or sheet_name.lower() == "none":
+        raise Exception("LatestSheet is empty")
+
+    return sheet_name
 
 # ==================================================
 # LOAD SHEET
@@ -50,7 +56,7 @@ def load_sheet(sheet_name):
     df = pd.read_csv(url, dtype=str)
 
     if df.empty:
-        raise Exception("Sheet empty")
+        raise Exception("Sheet is empty or inaccessible")
 
     df.columns = df.columns.str.strip().str.upper()
 
@@ -117,7 +123,7 @@ except Exception as e:
 # ==================================================
 device_df = device_status_count(df)
 
-# Rename for clean UI
+# Clean column names
 device_df.columns = [
     "Device",
     "Installed",
@@ -136,9 +142,9 @@ st.dataframe(
 )
 
 # ==================================================
-# 📊 STACKED BAR CHART
+# 🎨 PROFESSIONAL GROUPED BAR CHART
 # ==================================================
-st.subheader("📊 Status Distribution (Stacked)")
+st.subheader("📊 Status Distribution (Professional View)")
 
 chart_df = device_df.set_index("Device")[[
     "Installed",
@@ -147,7 +153,42 @@ chart_df = device_df.set_index("Device")[[
     "Required"
 ]]
 
-st.bar_chart(chart_df)
+long_df = chart_df.reset_index().melt(
+    id_vars="Device",
+    var_name="Status",
+    value_name="Count"
+)
+
+# Color scheme
+color_scale = alt.Scale(
+    domain=[
+        "Installed",
+        "SCCM > 4 wks",
+        "Not Connected",
+        "Required"
+    ],
+    range=[
+        "#2ecc71",  # green
+        "#f39c12",  # orange
+        "#e74c3c",  # red
+        "#3498db"   # blue
+    ]
+)
+
+chart = (
+    alt.Chart(long_df)
+    .mark_bar(size=35)
+    .encode(
+        x=alt.X("Device:N", title="Device"),
+        xOffset="Status:N",
+        y=alt.Y("Count:Q", title="Number of Devices"),
+        color=alt.Color("Status:N", scale=color_scale),
+        tooltip=["Device", "Status", "Count"]
+    )
+    .properties(height=400)
+)
+
+st.altair_chart(chart, use_container_width=True)
 
 # ==================================================
 # RAW DATA

@@ -92,8 +92,10 @@ def device_status_count(df):
             row[status] = count
             total += count
 
+        percent = (row["INSTALLED"] / total * 100) if total else 0
+
         row["TOTAL"] = total
-        row["% INSTALLED"] = round((row["INSTALLED"] / total * 100), 1) if total else 0
+        row["% INSTALLED"] = percent
 
         result.append(row)
 
@@ -128,14 +130,15 @@ device_df.columns = [
     "% Installed"
 ]
 
+# ✅ Format % to 2 decimal places
+device_df["% Installed"] = device_df["% Installed"].map(lambda x: f"{x:.2f}")
+
 st.subheader("💻 Device Status Breakdown")
 
 styled_df = (
     device_df.style
     .hide(axis="index")
-    .set_properties(**{
-        "text-align": "center"
-    })
+    .set_properties(**{"text-align": "center"})
     .set_table_styles([
         {
             "selector": "th",
@@ -149,7 +152,8 @@ styled_df = (
     .highlight_min(subset=["% Installed"], color="#f28b82")
 )
 
-st.dataframe(styled_df, use_container_width=True)
+# ✅ Use st.table for proper styling
+st.table(styled_df)
 
 # ==================================================
 # PROFESSIONAL CHART
@@ -161,7 +165,7 @@ chart_df = device_df.set_index("Device")[[
     "SCCM > 4 wks",
     "Not Connected",
     "Required"
-]]
+]].astype(int)
 
 long_df = chart_df.reset_index().melt(
     id_vars="Device",

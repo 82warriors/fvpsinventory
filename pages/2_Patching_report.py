@@ -11,12 +11,12 @@ st.set_page_config(page_title="Patching Report", layout="wide")
 SPREADSHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
 
 st.title("🛠️ Patching Report")
-st.caption("Auto-updating dashboard (stable version)")
+st.caption("Auto-updating dashboard (refresh every 30s)")
 
 # ==================================================
-# AUTO REFRESH (every 60 sec)
+# AUTO REFRESH (every 30 sec)
 # ==================================================
-REFRESH_INTERVAL = 60
+REFRESH_INTERVAL = 30
 
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = time.time()
@@ -26,9 +26,9 @@ if time.time() - st.session_state.last_refresh > REFRESH_INTERVAL:
     st.rerun()
 
 # ==================================================
-# GET LATEST SHEET (META: A1 header, A2 value)
+# GET META (A1 header, A2 value)
 # ==================================================
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=30)
 def get_latest_sheet():
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=META"
 
@@ -45,22 +45,30 @@ def get_latest_sheet():
     return sheet_name
 
 # ==================================================
-# LOAD TARGET SHEET (FIXED URL ENCODING)
+# LOAD SHEET (FIXED VERSION)
 # ==================================================
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=30)
 def load_sheet(sheet_name):
     encoded_name = urllib.parse.quote(sheet_name)
 
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={encoded_name}"
 
-    df = pd.read_csv(url, dtype=str)
+    try:
+        df = pd.read_csv(url, dtype=str)
+    except Exception as e:
+        raise Exception(f"Failed to read sheet '{sheet_name}': {e}")
+
+    if not isinstance(df, pd.DataFrame):
+        raise Exception("Invalid data returned (not DataFrame)")
 
     if df.empty:
-        raise Exception(f"Sheet '{sheet_name}' is empty")
+        raise Exception(f"Sheet '{sheet_name}' is empty or inaccessible")
 
-    # Clean data
+    # ✅ SAFE CLEANING (no applymap)
     df.columns = df.columns.str.strip().str.upper()
-    df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
+
+    for col in df.columns:
+        df[col] = df[col].astype(str).str.strip()
 
     return df
 
@@ -131,4 +139,4 @@ st.dataframe(df, use_container_width=True)
 # ==================================================
 # FOOTER
 # ==================================================
-st.caption("🔄 Auto refresh every 60 seconds")
+st.caption("🔄 Auto refresh every 30 seconds")

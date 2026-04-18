@@ -11,7 +11,7 @@ st.set_page_config(page_title="Patching Report", layout="wide")
 SPREADSHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
 
 st.title("🛠️ Patching Report Dashboard")
-st.caption("Live monitoring with charts")
+st.caption("Device status monitoring (stacked view)")
 
 # ==================================================
 # AUTO REFRESH (30 sec)
@@ -59,18 +59,7 @@ def load_sheet(sheet_name):
     return df
 
 # ==================================================
-# LOAD SUMMARY (FOR TREND)
-# ==================================================
-@st.cache_data(ttl=60)
-def load_summary():
-    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Summary"
-    df = pd.read_csv(url)
-
-    df.columns = df.columns.str.strip().str.upper()
-    return df
-
-# ==================================================
-# DEVICE STATUS COUNT
+# DEVICE STATUS COUNT + TOTAL
 # ==================================================
 def device_status_count(df):
     devices = [
@@ -90,6 +79,7 @@ def device_status_count(df):
 
     for device in devices:
         row = {"Device": device.title()}
+        total = 0
 
         for status in statuses:
             count = df[
@@ -98,7 +88,9 @@ def device_status_count(df):
             ].shape[0]
 
             row[status] = count
+            total += count
 
+        row["TOTAL"] = total
         result.append(row)
 
     return pd.DataFrame(result)
@@ -122,42 +114,37 @@ except Exception as e:
 # ==================================================
 device_df = device_status_count(df)
 
+# Clean column order
+device_df = device_df[
+    ["Device", "INSTALLED", "SCCM EPP > 4 WKS", "NOT CONNECTED", "REQUIRED", "TOTAL"]
+]
+
 st.subheader("💻 Device Status Breakdown")
 st.dataframe(device_df, use_container_width=True)
 
 # ==================================================
-# 📊 BAR CHART
+# 📊 STACKED BAR CHART
 # ==================================================
-st.subheader("📊 Status Distribution per Device")
+st.subheader("📊 Stacked Status Distribution")
 
-chart_df = device_df.set_index("Device")
+chart_df = device_df.set_index("Device")[[
+    "INSTALLED",
+    "SCCM EPP > 4 WKS",
+    "NOT CONNECTED",
+    "REQUIRED"
+]]
 
-st.bar_chart(chart_df)
+st.bar_chart(chart_df)  # 🔥 auto-stacked in Streamlit
 
 # ==================================================
-# 📈 TREND OVER TIME
+# OPTIONAL: % INSTALLED
 # ==================================================
-st.subheader("📈 Patching Trend Over Time")
+device_df["% INSTALLED"] = (
+    device_df["INSTALLED"] / device_df["TOTAL"] * 100
+).round(1)
 
-try:
-    summary_df = load_summary()
-
-    # Convert percentage
-    summary_df["PERCENTAGE"] = summary_df["PERCENTAGE"].str.replace("%","").astype(float)
-
-    trend_df = summary_df[["DATE", "PERCENTAGE"]].copy()
-
-    trend_df["DATE"] = pd.to_datetime(trend_df["DATE"], errors="coerce")
-
-    trend_df = trend_df.sort_values("DATE")
-
-    trend_df = trend_df.set_index("DATE")
-
-    st.line_chart(trend_df)
-
-except Exception as e:
-    st.warning("⚠️ Trend not available yet")
-    st.exception(e)
+st.subheader("📈 Installation Rate (%)")
+st.dataframe(device_df[["Device", "% INSTALLED"]], use_container_width=True)
 
 # ==================================================
 # RAW DATA

@@ -10,66 +10,71 @@ from datetime import datetime
 st.set_page_config(page_title="Patching Report", layout="wide")
 
 st.title("🛠️ Patching Report")
-st.caption("Automatically detects latest dated worksheet (e.g. 01 Jan 2026)")
+st.caption("Auto-detect latest sheet based on date name")
 
 SPREADSHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
 
 # ==================================================
-# GET ALL SHEETS
+# GET SHEETS
 # ==================================================
 @st.cache_data(ttl=300)
 def get_sheets():
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
     html = requests.get(url).text
-
     matches = re.findall(r'"sheetId":(\d+).*?"title":"(.*?)"', html)
 
-    sheets = []
-    for gid, name in matches:
-        sheets.append({
-            "gid": gid,
-            "name": name.strip()
-        })
-
-    return sheets
+    return [{"gid": gid, "name": name.strip()} for gid, name in matches]
 
 # ==================================================
-# GET LATEST DATED SHEET
+# PARSE DATE FLEXIBLY
+# ==================================================
+def parse_date(name):
+    formats = [
+        "%d %b %Y",   # 01 Jan 2026
+        "%d %B %Y"    # 16 April 2026
+    ]
+    
+    for fmt in formats:
+        try:
+            return datetime.strptime(name, fmt)
+        except:
+            continue
+    
+    return None
+
+# ==================================================
+# GET LATEST SHEET
 # ==================================================
 @st.cache_data(ttl=300)
 def get_latest_dated_sheet():
     sheets = get_sheets()
-
-    valid_sheets = []
+    valid = []
 
     for s in sheets:
-        try:
-            parsed_date = datetime.strptime(s["name"], "%d %b %Y")
-            valid_sheets.append({
+        parsed = parse_date(s["name"])
+        if parsed:
+            valid.append({
                 "gid": s["gid"],
                 "name": s["name"],
-                "date": parsed_date
+                "date": parsed
             })
-        except:
-            continue  # ignore non-date sheets
 
-    if not valid_sheets:
+    if not valid:
         return None, None, []
 
-    valid_sheets = sorted(valid_sheets, key=lambda x: x["date"], reverse=True)
+    valid.sort(key=lambda x: x["date"], reverse=True)
 
-    return valid_sheets[0]["gid"], valid_sheets[0]["name"], valid_sheets
+    return valid[0]["gid"], valid[0]["name"], valid
 
 # ==================================================
-# LOAD SHEET DATA
+# LOAD DATA
 # ==================================================
 def load_sheet(gid):
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid={gid}"
-
     df = pd.read_csv(url, dtype=str)
 
     # Clean headers
-    df.columns = df.columns.astype(str).str.strip().str.upper()
+    df.columns = df.columns.str.strip().str.upper()
 
     # Clean values
     df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
@@ -80,7 +85,7 @@ def load_sheet(gid):
 # CALCULATE SUMMARY
 # ==================================================
 def calculate_summary(df):
-    summary_keys = [
+    keys = [
         "ADMIN INSTALLED",
         "ACAD INSTALLED",
         "ADMIN NOT CONNECTED",
@@ -93,70 +98,61 @@ def calculate_summary(df):
         "FAULTY"
     ]
 
-    summary = {key: 0 for key in summary_keys}
+    summary = {k: 0 for k in keys}
 
     for col in df.columns:
-        col_upper = col.upper()
-
-        for key in summary_keys:
-            if key in col_upper:
+        for key in keys:
+            if key in col:
                 summary[key] += pd.to_numeric(df[col], errors="coerce").fillna(0).sum()
 
     return summary
 
 # ==================================================
-# LOAD DATA
+# LOAD LATEST
 # ==================================================
-latest_gid, latest_name, all_valid_sheets = get_latest_dated_sheet()
+latest_gid, latest_name, all_sheets = get_latest_dated_sheet()
 
 if latest_gid is None:
-    st.error("❌ No valid dated worksheets found (format must be like '01 Jan 2026')")
+    st.error("❌ No valid date-formatted sheets found")
     st.stop()
 
-# Optional manual override
-sheet_names = [s["name"] for s in all_valid_sheets]
+# Optional override
+sheet_names = [s["name"] for s in all_sheets]
 
-selected_sheet = st.selectbox(
-    "📂 Select Sheet (Optional Override)",
+selected = st.selectbox(
+    "📂 Select Sheet",
     sheet_names,
     index=0
 )
 
-selected_gid = next(s["gid"] for s in all_valid_sheets if s["name"] == selected_sheet)
+selected_gid = next(s["gid"] for s in all_sheets if s["name"] == selected)
 
 df = load_sheet(selected_gid)
 
-st.success(f"📅 Showing Sheet: {selected_sheet}")
+st.success(f"📅 Showing: {selected}")
 
 # ==================================================
-# CALCULATIONS
+# METRICS
 # ==================================================
 summary = calculate_summary(df)
 
 installed = summary["ADMIN INSTALLED"] + summary["ACAD INSTALLED"]
 total = sum(summary.values())
-percentage = (installed / total * 100) if total > 0 else 0
-
-# ==================================================
-# DISPLAY SUMMARY
-# ==================================================
-st.subheader("📊 Summary")
+percent = (installed / total * 100) if total else 0
 
 col1, col2, col3 = st.columns(3)
 
 col1.metric("Installed", int(installed))
-col2.metric("Total Devices", int(total))
-col3.metric("Patching %", f"{percentage:.2f}%")
+col2.metric("Total", int(total))
+col3.metric("Patching %", f"{percent:.2f}%")
 
 st.divider()
 
 # ==================================================
 # BREAKDOWN
 # ==================================================
-st.subheader("📋 Breakdown")
+st.subheader("📊 Breakdown")
 st.dataframe(pd.DataFrame([summary]), use_container_width=True)
-
-st.divider()
 
 # ==================================================
 # RAW DATA
@@ -165,15 +161,15 @@ st.subheader("📄 Raw Data")
 st.dataframe(df, use_container_width=True)
 
 # ==================================================
-# DEBUG VIEW
+# DEBUG
 # ==================================================
-with st.expander("🔍 Debug: Detected Date Sheets"):
-    for s in all_valid_sheets:
+with st.expander("🔍 Detected Date Sheets"):
+    for s in all_sheets:
         st.write(f"✅ {s['name']}")
 
 # ==================================================
-# REFRESH BUTTON
+# REFRESH
 # ==================================================
-if st.button("🔄 Refresh Data"):
+if st.button("🔄 Refresh"):
     st.cache_data.clear()
     st.rerun()

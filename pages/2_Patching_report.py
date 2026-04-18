@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import time
+import urllib.parse
 
 # ==================================================
 # CONFIG
@@ -25,7 +26,7 @@ if time.time() - st.session_state.last_refresh > REFRESH_INTERVAL:
     st.rerun()
 
 # ==================================================
-# LOAD META (FIXED FORMAT: A1 header, A2 value)
+# GET LATEST SHEET (META: A1 header, A2 value)
 # ==================================================
 @st.cache_data(ttl=60)
 def get_latest_sheet():
@@ -33,11 +34,8 @@ def get_latest_sheet():
 
     df = pd.read_csv(url, header=None)
 
-    # Expect:
-    # Row 0 → header
-    # Row 1 → value
     if df.shape[0] < 2:
-        raise Exception("META sheet missing data (needs at least 2 rows)")
+        raise Exception("META sheet missing data")
 
     sheet_name = str(df.iloc[1, 0]).strip()
 
@@ -47,11 +45,13 @@ def get_latest_sheet():
     return sheet_name
 
 # ==================================================
-# LOAD TARGET SHEET
+# LOAD TARGET SHEET (FIXED URL ENCODING)
 # ==================================================
 @st.cache_data(ttl=60)
 def load_sheet(sheet_name):
-    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+    encoded_name = urllib.parse.quote(sheet_name)
+
+    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={encoded_name}"
 
     df = pd.read_csv(url, dtype=str)
 

@@ -27,7 +27,7 @@ if time.time() - st.session_state.last_refresh > REFRESH_INTERVAL:
     st.rerun()
 
 # ==================================================
-# GET META (Latest Sheet)
+# GET META
 # ==================================================
 @st.cache_data(ttl=30)
 def get_latest_sheet():
@@ -37,12 +37,7 @@ def get_latest_sheet():
     if df.shape[0] < 2:
         raise Exception("META sheet missing data")
 
-    sheet_name = str(df.iloc[1, 0]).strip()
-
-    if not sheet_name or sheet_name.lower() == "none":
-        raise Exception("LatestSheet is empty")
-
-    return sheet_name
+    return str(df.iloc[1, 0]).strip()
 
 # ==================================================
 # LOAD SHEET
@@ -56,7 +51,7 @@ def load_sheet(sheet_name):
     df = pd.read_csv(url, dtype=str)
 
     if df.empty:
-        raise Exception("Sheet is empty or inaccessible")
+        raise Exception("Sheet is empty")
 
     df.columns = df.columns.str.strip().str.upper()
 
@@ -66,7 +61,7 @@ def load_sheet(sheet_name):
     return df
 
 # ==================================================
-# DEVICE STATUS + TOTAL + %
+# DEVICE CALCULATION
 # ==================================================
 def device_status_count(df):
     devices = [
@@ -105,7 +100,7 @@ def device_status_count(df):
     return pd.DataFrame(result)
 
 # ==================================================
-# MAIN LOAD
+# LOAD DATA
 # ==================================================
 try:
     sheet_name = get_latest_sheet()
@@ -119,11 +114,10 @@ except Exception as e:
     st.stop()
 
 # ==================================================
-# DEVICE TABLE (COMBINED)
+# TABLE
 # ==================================================
 device_df = device_status_count(df)
 
-# Clean column names
 device_df.columns = [
     "Device",
     "Installed",
@@ -136,15 +130,31 @@ device_df.columns = [
 
 st.subheader("💻 Device Status Breakdown")
 
-st.dataframe(
-    device_df.style.highlight_min(subset=["% Installed"], color="salmon"),
-    use_container_width=True
+styled_df = (
+    device_df.style
+    .hide(axis="index")
+    .set_properties(**{
+        "text-align": "center"
+    })
+    .set_table_styles([
+        {
+            "selector": "th",
+            "props": [
+                ("font-weight", "bold"),
+                ("color", "black"),
+                ("text-align", "center")
+            ]
+        }
+    ])
+    .highlight_min(subset=["% Installed"], color="#f28b82")
 )
 
+st.dataframe(styled_df, use_container_width=True)
+
 # ==================================================
-# 🎨 PROFESSIONAL GROUPED BAR CHART
+# PROFESSIONAL CHART
 # ==================================================
-st.subheader("📊 Status Distribution (Professional View)")
+st.subheader("📊 Status Distribution")
 
 chart_df = device_df.set_index("Device")[[
     "Installed",
@@ -159,7 +169,6 @@ long_df = chart_df.reset_index().melt(
     value_name="Count"
 )
 
-# Color scheme
 color_scale = alt.Scale(
     domain=[
         "Installed",
@@ -168,10 +177,10 @@ color_scale = alt.Scale(
         "Required"
     ],
     range=[
-        "#2ecc71",  # green
-        "#f39c12",  # orange
-        "#e74c3c",  # red
-        "#3498db"   # blue
+        "#2ecc71",
+        "#f39c12",
+        "#e74c3c",
+        "#3498db"
     ]
 )
 
@@ -179,9 +188,9 @@ chart = (
     alt.Chart(long_df)
     .mark_bar(size=35)
     .encode(
-        x=alt.X("Device:N", title="Device"),
+        x=alt.X("Device:N"),
         xOffset="Status:N",
-        y=alt.Y("Count:Q", title="Number of Devices"),
+        y=alt.Y("Count:Q"),
         color=alt.Color("Status:N", scale=color_scale),
         tooltip=["Device", "Status", "Count"]
     )

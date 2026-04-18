@@ -5,7 +5,7 @@ import re
 from datetime import datetime
 
 # ==================================================
-# PAGE CONFIG
+# CONFIG
 # ==================================================
 st.set_page_config(page_title="Patching Report", layout="wide")
 
@@ -15,56 +15,67 @@ st.caption("Auto-detect latest sheet based on date name")
 SPREADSHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
 
 # ==================================================
-# GET SHEETS
+# GET SHEETS (STABLE VERSION)
 # ==================================================
 @st.cache_data(ttl=300)
 def get_sheets():
-    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
+    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit"
     html = requests.get(url).text
-    matches = re.findall(r'"sheetId":(\d+).*?"title":"(.*?)"', html)
 
-    return [{"gid": gid, "name": name.strip()} for gid, name in matches]
+    matches = re.findall(r'"gid":(\d+),"title":"(.*?)"', html)
+
+    sheets = []
+    for gid, name in matches:
+        clean_name = name.strip()
+        sheets.append({"gid": gid, "name": clean_name})
+
+    return sheets
 
 # ==================================================
-# PARSE DATE FLEXIBLY
+# SAFE DATE PARSER
 # ==================================================
 def parse_date(name):
+    # Clean weird chars
+    name = name.strip()
+    name = re.sub(r"[^\w\s]", "", name)
+
     formats = [
-        "%d %b %Y",   # 01 Jan 2026
-        "%d %B %Y"    # 16 April 2026
+        "%d %B %Y",  # 16 April 2026
+        "%d %b %Y",  # 01 Jan 2026
     ]
-    
+
     for fmt in formats:
         try:
             return datetime.strptime(name, fmt)
         except:
             continue
-    
+
     return None
 
 # ==================================================
 # GET LATEST SHEET
 # ==================================================
 @st.cache_data(ttl=300)
-def get_latest_dated_sheet():
+def get_latest_sheet():
     sheets = get_sheets()
+
     valid = []
 
     for s in sheets:
-        parsed = parse_date(s["name"])
-        if parsed:
+        dt = parse_date(s["name"])
+        if dt:
             valid.append({
                 "gid": s["gid"],
                 "name": s["name"],
-                "date": parsed
+                "date": dt
             })
 
     if not valid:
-        return None, None, []
+        return None, None, sheets
 
     valid.sort(key=lambda x: x["date"], reverse=True)
 
-    return valid[0]["gid"], valid[0]["name"], valid
+    return valid[0], valid, sheets
 
 # ==================================================
 # LOAD DATA
@@ -73,16 +84,13 @@ def load_sheet(gid):
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid={gid}"
     df = pd.read_csv(url, dtype=str)
 
-    # Clean headers
     df.columns = df.columns.str.strip().str.upper()
-
-    # Clean values
     df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
 
     return df
 
 # ==================================================
-# CALCULATE SUMMARY
+# SUMMARY
 # ==================================================
 def calculate_summary(df):
     keys = [
@@ -108,28 +116,29 @@ def calculate_summary(df):
     return summary
 
 # ==================================================
-# LOAD LATEST
+# MAIN
 # ==================================================
-latest_gid, latest_name, all_sheets = get_latest_dated_sheet()
+latest, valid_sheets, all_sheets = get_latest_sheet()
 
-if latest_gid is None:
-    st.error("❌ No valid date-formatted sheets found")
+if latest is None:
+    st.error("❌ No valid date sheets found")
+    
+    with st.expander("🔍 All detected sheet names"):
+        for s in all_sheets:
+            st.write(f"'{s['name']}'")
+    
     st.stop()
 
-# Optional override
-sheet_names = [s["name"] for s in all_sheets]
+# Dropdown
+names = [s["name"] for s in valid_sheets]
 
-selected = st.selectbox(
-    "📂 Select Sheet",
-    sheet_names,
-    index=0
-)
+selected_name = st.selectbox("📂 Select Sheet", names, index=0)
 
-selected_gid = next(s["gid"] for s in all_sheets if s["name"] == selected)
+selected_gid = next(s["gid"] for s in valid_sheets if s["name"] == selected_name)
 
 df = load_sheet(selected_gid)
 
-st.success(f"📅 Showing: {selected}")
+st.success(f"📅 Showing: {selected_name}")
 
 # ==================================================
 # METRICS
@@ -149,23 +158,20 @@ col3.metric("Patching %", f"{percent:.2f}%")
 st.divider()
 
 # ==================================================
-# BREAKDOWN
+# TABLES
 # ==================================================
 st.subheader("📊 Breakdown")
 st.dataframe(pd.DataFrame([summary]), use_container_width=True)
 
-# ==================================================
-# RAW DATA
-# ==================================================
 st.subheader("📄 Raw Data")
 st.dataframe(df, use_container_width=True)
 
 # ==================================================
 # DEBUG
 # ==================================================
-with st.expander("🔍 Detected Date Sheets"):
+with st.expander("🔍 Debug - All Sheets"):
     for s in all_sheets:
-        st.write(f"✅ {s['name']}")
+        st.write(f"'{s['name']}'")
 
 # ==================================================
 # REFRESH

@@ -10,7 +10,7 @@ st.set_page_config(page_title="Patching Report", layout="wide")
 SPREADSHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
 
 st.title("🛠️ Patching Report")
-st.caption("Auto-updating dashboard")
+st.caption("Auto-updating dashboard (stable version)")
 
 # ==================================================
 # AUTO REFRESH (every 60 sec)
@@ -25,37 +25,47 @@ if time.time() - st.session_state.last_refresh > REFRESH_INTERVAL:
     st.rerun()
 
 # ==================================================
-# GET META (LATEST SHEET)
+# LOAD META (FIXED FORMAT: A1 header, A2 value)
 # ==================================================
 @st.cache_data(ttl=60)
 def get_latest_sheet():
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=META"
-    df = pd.read_csv(url)
 
-    if "LatestSheet" not in df.columns:
-        raise Exception("META sheet missing 'LatestSheet' column")
+    df = pd.read_csv(url, header=None)
 
-    return df.iloc[0]["LatestSheet"]
+    # Expect:
+    # Row 0 → header
+    # Row 1 → value
+    if df.shape[0] < 2:
+        raise Exception("META sheet missing data (needs at least 2 rows)")
+
+    sheet_name = str(df.iloc[1, 0]).strip()
+
+    if not sheet_name or sheet_name.lower() == "none":
+        raise Exception("LatestSheet is empty")
+
+    return sheet_name
 
 # ==================================================
-# LOAD SHEET
+# LOAD TARGET SHEET
 # ==================================================
 @st.cache_data(ttl=60)
 def load_sheet(sheet_name):
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+
     df = pd.read_csv(url, dtype=str)
 
     if df.empty:
-        raise Exception("Sheet is empty")
+        raise Exception(f"Sheet '{sheet_name}' is empty")
 
-    # Clean
+    # Clean data
     df.columns = df.columns.str.strip().str.upper()
     df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
 
     return df
 
 # ==================================================
-# SUMMARY
+# SUMMARY CALCULATION
 # ==================================================
 def calculate_summary(df):
     keys = [
@@ -80,7 +90,7 @@ def calculate_summary(df):
 # ==================================================
 try:
     sheet_name = get_latest_sheet()
-    st.info(f"🔍 META says latest sheet: {sheet_name}")
+    st.info(f"📡 Latest sheet detected: {sheet_name}")
 
     df = load_sheet(sheet_name)
 
@@ -90,10 +100,8 @@ except Exception as e:
     st.stop()
 
 # ==================================================
-# DISPLAY
+# METRICS
 # ==================================================
-st.success(f"📅 Showing: {sheet_name}")
-
 summary = calculate_summary(df)
 
 installed = summary["ADMIN INSTALLED"] + summary["ACAD INSTALLED"]

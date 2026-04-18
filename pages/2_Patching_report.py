@@ -61,7 +61,7 @@ def load_sheet(sheet_name):
     return df
 
 # ==================================================
-# DEVICE CALCULATION
+# DEVICE CALCULATION (WITH UNKNOWN)
 # ==================================================
 def device_status_count(df):
     devices = [
@@ -74,7 +74,8 @@ def device_status_count(df):
         "INSTALLED",
         "SCCM EPP > 4 WKS",
         "NOT CONNECTED",
-        "REQUIRED"
+        "REQUIRED",
+        "UNKNOWN"
     ]
 
     result = []
@@ -126,11 +127,12 @@ device_df.columns = [
     "SCCM > 4 wks",
     "Not Connected",
     "Required",
+    "Unknown",
     "Total",
     "% Installed"
 ]
 
-# ✅ Format % to 2 decimal places
+# Format % to 2 decimal places
 device_df["% Installed"] = device_df["% Installed"].map(lambda x: f"{x:.2f}")
 
 st.subheader("💻 Device Status Breakdown")
@@ -150,13 +152,13 @@ styled_df = (
         }
     ])
     .highlight_min(subset=["% Installed"], color="#f28b82")
+    .highlight_max(subset=["Unknown"], color="#d3d3d3")  # highlight unknown
 )
 
-# ✅ Use st.table for proper styling
 st.table(styled_df)
 
 # ==================================================
-# PROFESSIONAL CHART
+# 📊 PROFESSIONAL CHART (WITH UNKNOWN)
 # ==================================================
 st.subheader("📊 Status Distribution")
 
@@ -164,7 +166,8 @@ chart_df = device_df.set_index("Device")[[
     "Installed",
     "SCCM > 4 wks",
     "Not Connected",
-    "Required"
+    "Required",
+    "Unknown"
 ]].astype(int)
 
 long_df = chart_df.reset_index().melt(
@@ -178,13 +181,15 @@ color_scale = alt.Scale(
         "Installed",
         "SCCM > 4 wks",
         "Not Connected",
-        "Required"
+        "Required",
+        "Unknown"
     ],
     range=[
-        "#2ecc71",
-        "#f39c12",
-        "#e74c3c",
-        "#3498db"
+        "#2ecc71",  # green
+        "#f39c12",  # orange
+        "#e74c3c",  # red
+        "#3498db",  # blue
+        "#95a5a6"   # grey
     ]
 )
 

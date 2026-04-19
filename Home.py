@@ -3,9 +3,10 @@ import pandas as pd
 import plotly.express as px
 from streamlit_autorefresh import st_autorefresh
 from datetime import datetime
+from pathlib import Path
 
 # ==================================================
-# PAGE CONFIG (STATIC ONLY)
+# PAGE CONFIG
 # ==================================================
 st.set_page_config(
     page_title="FVPS Dashboard",
@@ -33,24 +34,24 @@ footer {visibility: hidden;}
 if "app_title" not in st.session_state:
     st.session_state.app_title = "FVPS IT Management Dashboard"
 
-# Sidebar title control
 new_title = st.sidebar.text_input(
     "✏️ Update Header Title",
     value=st.session_state.app_title
 )
 
-# 🔥 FORCE UPDATE (fix for "not changing")
 if new_title != st.session_state.app_title:
     st.session_state.app_title = new_title
     st.rerun()
 
 # ==================================================
-# 🔴 HEADER WITH LOGO
+# 🔴 HEADER WITH LOGO (FIXED PATH)
 # ==================================================
+logo_path = Path(__file__).parent.parent / "logo.png"
+
 col1, col2 = st.columns([1, 10])
 
 with col1:
-    st.image("logo.png", width=70)  # ensure logo.png exists
+    st.image(logo_path, width=70)
 
 with col2:
     st.markdown(f"""
@@ -184,30 +185,6 @@ with tabs[0]:
 
     st.plotly_chart(fig1, use_container_width=True)
 
-    # Grouped Breakdown
-    st.markdown("## 📊 Absence Breakdown by Staff")
-
-    rows = []
-    for person in staff_names:
-        person_df = df[df["Name"] == person]
-        ml, vl, ccl, urgent, emergency, _ = get_absence_breakdown(person_df)
-
-        rows.extend([
-            {"Name": person, "Type": "ML", "Count": ml},
-            {"Name": person, "Type": "VL", "Count": vl},
-            {"Name": person, "Type": "CCL", "Count": ccl},
-            {"Name": person, "Type": "Urgent", "Count": urgent},
-            {"Name": person, "Type": "Emergency", "Count": emergency},
-        ])
-
-    group_df = pd.DataFrame(rows)
-
-    fig2 = px.bar(group_df, x="Type", y="Count",
-                  color="Name", barmode="group", text="Count")
-    fig2.update_traces(textposition="outside")
-
-    st.plotly_chart(fig2, use_container_width=True)
-
 # ==================================================
 # 👤 STAFF TABS
 # ==================================================
@@ -234,7 +211,7 @@ for i, person in enumerate(staff_names, start=1):
 
         st.metric("⏰ Late Count", late_count)
 
-        # Monthly
+        # Monthly Chart
         st.markdown("📈 Monthly")
 
         temp = person_df.copy()
@@ -253,31 +230,3 @@ for i, person in enumerate(staff_names, start=1):
         fig.update_layout(xaxis_tickangle=-45)
 
         st.plotly_chart(fig, use_container_width=True)
-
-        # Breakdown
-        st.markdown("📊 Absence Breakdown")
-
-        chart_df = pd.DataFrame({
-            "Type": ["ML","VL","CCL","Urgent","Emergency"],
-            "Count": [ml, vl, ccl, urgent, emergency]
-        })
-
-        fig2 = px.bar(chart_df, x="Type", y="Count", text="Count")
-        fig2.update_traces(textposition="outside")
-
-        st.plotly_chart(fig2, use_container_width=True)
-
-        # Alerts
-        st.markdown("🚨 Alerts")
-
-        alerts = []
-        if absence_rate > 40:
-            alerts.append("🚫 High absence rate")
-        if late_count > 10:
-            alerts.append("⏰ High late frequency")
-
-        if not alerts:
-            st.success("✅ No issues")
-        else:
-            for a in alerts:
-                st.warning(a)

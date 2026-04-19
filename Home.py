@@ -6,12 +6,19 @@ import streamlit as st
 st.set_page_config(page_title="FVPS Inventory System", layout="wide")
 
 # ==================================================
-# HEADER
+# HEADER (WITH LOGO)
 # ==================================================
-st.title("🏠 FVPS Inventory & Monitoring System")
-st.caption("A centralised platform for device tracking, patching and upgrades")
+col1, col2 = st.columns([1, 6])
+
+with col1:
+    st.image("inventory.png", width=80)
+
+with col2:
+    st.title("FVPS Inventory & Monitoring System")
+    st.caption("A centralised platform for device tracking, patching and upgrades")
 
 st.divider()
+
 
 # ==================================================
 # ABOUT

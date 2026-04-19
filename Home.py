@@ -3,56 +3,6 @@ import pandas as pd
 import plotly.express as px
 from streamlit_autorefresh import st_autorefresh
 from datetime import datetime
-from pathlib import Path
-
-# ==================================================
-# HIDE STREAMLIT UI
-# ==================================================
-st.markdown("""
-<style>
-header {visibility: hidden;}
-[data-testid="stHeader"] {display: none;}
-[data-testid="stToolbar"] {display: none;}
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-.block-container {padding-top: 1rem;}
-</style>
-""", unsafe_allow_html=True)
-
-# ==================================================
-# SESSION STATE (DYNAMIC TITLE)
-# ==================================================
-if "app_title" not in st.session_state:
-    st.session_state.app_title = "FVPS IT Management Dashboard"
-
-new_title = st.sidebar.text_input(
-    "✏️ Update Header Title",
-    value=st.session_state.app_title
-)
-
-if new_title != st.session_state.app_title:
-    st.session_state.app_title = new_title
-    st.rerun()
-
-# ==================================================
-# 🔴 HEADER WITH LOGO (FIXED PATH)
-# ==================================================
-logo_path = Path(__file__).parent.parent / "logo.png"
-
-col1, col2 = st.columns([1, 10])
-
-with col1:
-    st.image(logo_path, width=70)
-
-with col2:
-    st.markdown(f"""
-    <h1 style='margin-bottom:0;'>{st.session_state.app_title}</h1>
-    <p style='color:gray;margin-top:0;font-size:14px;'>
-    Real-time monitoring of FVPS IT infrastructure
-    </p>
-    """, unsafe_allow_html=True)
-
-st.divider()
 
 # ==================================================
 # AUTO REFRESH
@@ -78,6 +28,7 @@ def load_data():
 
 df_raw = load_data()
 
+# Manual refresh
 if st.button("🔄 Refresh Now"):
     st.cache_data.clear()
     st.rerun()
@@ -124,6 +75,11 @@ def get_absence_breakdown(data):
     return ml, vl, ccl, urgent, emergency, total
 
 # ==================================================
+# PAGE TITLE (CONTENT ONLY)
+# ==================================================
+st.markdown("## 📊 Attendance Dashboard")
+
+# ==================================================
 # TABS
 # ==================================================
 staff_names = df["Name"].unique().tolist()
@@ -134,7 +90,7 @@ tabs = st.tabs(["🏠 Summary"] + [f"👤 {name}" for name in staff_names])
 # ==================================================
 with tabs[0]:
 
-    st.markdown("## 🟢 Today Status")
+    st.markdown("### 🟢 Today Status")
     today_df = df[df["Date"] == today]
 
     if today_df.empty:
@@ -142,24 +98,24 @@ with tabs[0]:
     else:
         st.dataframe(today_df, use_container_width=True)
 
-    st.markdown("## 📊 Summary")
+    st.markdown("### 📊 Summary")
 
     ml, vl, ccl, urgent, emergency, absence_total = get_absence_breakdown(df)
     late_count = df["Leave Type"].str.contains("late", case=False).sum()
     absence_rate = (absence_total / max(calendar_days,1)) * 100
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
-    c1.metric("🩺 ML", ml)
-    c2.metric("🏖 VL", vl)
-    c3.metric("👶 CCL", ccl)
-    c4.metric("⚡ Urgent", urgent)
-    c5.metric("🚨 Emergency", emergency)
-    c6.metric("🚫 Total Absence", f"{absence_total} ({absence_rate:.2f}%)")
+    c1.metric("ML", ml)
+    c2.metric("VL", vl)
+    c3.metric("CCL", ccl)
+    c4.metric("Urgent", urgent)
+    c5.metric("Emergency", emergency)
+    c6.metric("Total Absence", f"{absence_total} ({absence_rate:.2f}%)")
 
-    st.metric("⏰ Late Count", late_count)
+    st.metric("Late Count", late_count)
 
     # Comparison Chart
-    st.markdown("## 📊 Total Absence Comparison")
+    st.markdown("### 📊 Total Absence Comparison")
 
     comparison_data = []
     for person in staff_names:
@@ -169,8 +125,14 @@ with tabs[0]:
 
     comparison_df = pd.DataFrame(comparison_data)
 
-    fig1 = px.bar(comparison_df, x="Name", y="Total Absence",
-                  text="Total Absence", color="Name")
+    fig1 = px.bar(
+        comparison_df,
+        x="Name",
+        y="Total Absence",
+        text="Total Absence",
+        color="Name"
+    )
+
     fig1.update_traces(textposition="outside")
     fig1.update_layout(showlegend=False)
 
@@ -183,7 +145,7 @@ for i, person in enumerate(staff_names, start=1):
 
     with tabs[i]:
 
-        st.markdown(f"## 👤 {person}")
+        st.markdown(f"### 👤 {person}")
 
         person_df = df[df["Name"] == person]
 
@@ -193,17 +155,17 @@ for i, person in enumerate(staff_names, start=1):
         absence_rate = (absence_total / max(calendar_days,1)) * 100
 
         c1, c2, c3, c4, c5, c6 = st.columns(6)
-        c1.metric("🩺 ML", ml)
-        c2.metric("🏖 VL", vl)
-        c3.metric("👶 CCL", ccl)
-        c4.metric("⚡ Urgent", urgent)
-        c5.metric("🚨 Emergency", emergency)
-        c6.metric("🚫 Total Absence", f"{absence_total} ({absence_rate:.2f}%)")
+        c1.metric("ML", ml)
+        c2.metric("VL", vl)
+        c3.metric("CCL", ccl)
+        c4.metric("Urgent", urgent)
+        c5.metric("Emergency", emergency)
+        c6.metric("Total Absence", f"{absence_total} ({absence_rate:.2f}%)")
 
-        st.metric("⏰ Late Count", late_count)
+        st.metric("Late Count", late_count)
 
         # Monthly Chart
-        st.markdown("📈 Monthly")
+        st.markdown("### 📈 Monthly")
 
         temp = person_df.copy()
         temp["Month"] = temp["Date"].dt.to_period("M").dt.to_timestamp()
@@ -217,6 +179,7 @@ for i, person in enumerate(staff_names, start=1):
         monthly["Month_str"] = monthly["Month"].dt.strftime("%b %Y")
 
         fig = px.bar(monthly, x="Month_str", y="Count", text="Count")
+
         fig.update_traces(textposition="outside")
         fig.update_layout(xaxis_tickangle=-45)
 

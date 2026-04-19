@@ -5,7 +5,11 @@ import plotly.express as px
 # ==================================================
 # PAGE CONFIG
 # ==================================================
-st.set_page_config(page_title="FVPS Dashboard", layout="wide")
+st.set_page_config(
+    page_title="Attendance Ops Dashboard",
+    page_icon="🔴",
+    layout="wide"
+)
 
 st.title("📊 FVPS IT Management Dashboard")
 st.caption("Real-time monitoring of FVPS IT infrastructure • Auto-updated from central data source")

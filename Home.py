@@ -1,186 +1,112 @@
 import streamlit as st
-import pandas as pd
-import plotly.express as px
-from streamlit_autorefresh import st_autorefresh
-from datetime import datetime
-
-# ==================================================
-# AUTO REFRESH
-# ==================================================
-st_autorefresh(interval=30000, key="refresh")
 
 # ==================================================
 # CONFIG
 # ==================================================
-SHEET_ID = "1TZcv_U-U7R9OM98AEMzZ2gvu2Ca6ddqd3yCCxXsTvhE"
-staff1_name = "Amira"
-staff2_name = "Idham"
+st.set_page_config(page_title="FVPS Inventory System", layout="wide")
 
 # ==================================================
-# LOAD DATA
+# HEADER
 # ==================================================
-@st.cache_data(ttl=30)
-def load_data():
-    url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
-    df = pd.read_csv(url)
-    df.columns = [str(c).strip() for c in df.columns]
-    return df
+st.title("🏠 FVPS Inventory & Monitoring System")
+st.caption("A centralised platform for device tracking, patching and upgrades")
 
-df_raw = load_data()
-
-# Manual refresh
-if st.button("🔄 Refresh Now"):
-    st.cache_data.clear()
-    st.rerun()
-
-st.caption(f"Last updated: {datetime.now().strftime('%d %b %Y %H:%M:%S')}")
+st.divider()
 
 # ==================================================
-# TRANSFORM DATA
+# ABOUT
 # ==================================================
-df_raw = df_raw.dropna(how="all").reset_index(drop=True)
+st.subheader("📖 About This System")
 
-df1 = df_raw.iloc[:, 0:6].copy()
-df2 = df_raw.iloc[:, 7:13].copy()
+st.write("""
+This system is designed to support IT operations by providing a **centralised dashboard**
+for managing and monitoring devices across the organisation.
 
-df1.columns = ["Date","Day","Leave Type","Reason","Late","Relief"]
-df2.columns = ["Date","Day","Leave Type","Reason","Late","Relief"]
+It integrates directly with Google Sheets to deliver **real-time updates** on:
 
-df1["Name"] = staff1_name
-df2["Name"] = staff2_name
+- Device patching status  
+- Upgrade progress  
+- Inventory tracking  
 
-df = pd.concat([df1, df2])
-
-df["Date"] = pd.to_datetime(df["Date"].astype(str).str.strip(), errors="coerce")
-df = df.dropna(subset=["Date"])
-
-start_date = pd.to_datetime("2024-12-30")
-df = df[df["Date"] >= start_date]
-
-df["Leave Type"] = df["Leave Type"].astype(str).str.strip().str.lower()
-
-today = pd.Timestamp.today().normalize()
-calendar_days = (today - start_date).days + 1
+The goal is to provide clear visibility and help IT teams make faster, informed decisions.
+""")
 
 # ==================================================
-# ABSENCE FUNCTION
+# KEY FEATURES
 # ==================================================
-def get_absence_breakdown(data):
-    ml = (data["Leave Type"] == "ml").sum()
-    vl = (data["Leave Type"] == "vl").sum()
-    ccl = (data["Leave Type"] == "ccl").sum()
-    urgent = (data["Leave Type"] == "urgent leave").sum()
-    emergency = (data["Leave Type"] == "emergency leave").sum()
-    total = ml + vl + ccl + urgent + emergency
-    return ml, vl, ccl, urgent, emergency, total
+st.subheader("✨ Key Features")
 
-# ==================================================
-# PAGE TITLE (CONTENT ONLY)
-# ==================================================
-st.markdown("## 📊 Attendance Dashboard")
+col1, col2 = st.columns(2)
 
-# ==================================================
-# TABS
-# ==================================================
-staff_names = df["Name"].unique().tolist()
-tabs = st.tabs(["🏠 Summary"] + [f"👤 {name}" for name in staff_names])
+with col1:
+    st.markdown("""
+### 📦 Inventory
+- View all registered devices  
+- Track equipment details  
+- Manage asset information  
+""")
 
-# ==================================================
-# 🏠 SUMMARY
-# ==================================================
-with tabs[0]:
+with col2:
+    st.markdown("""
+### 🛠️ Patching Report
+- Monitor patching status  
+- Identify devices requiring action  
+- Track installation progress  
+""")
 
-    st.markdown("### 🟢 Today Status")
-    today_df = df[df["Date"] == today]
+col3, col4 = st.columns(2)
 
-    if today_df.empty:
-        st.success("✅ Everyone Present")
-    else:
-        st.dataframe(today_df, use_container_width=True)
+with col3:
+    st.markdown("""
+### ⬆️ Upgrade Tracking
+- Track upgrade progress  
+- Identify incomplete upgrades  
+- Monitor deployment status  
+""")
 
-    st.markdown("### 📊 Summary")
+with col4:
+    st.markdown("""
+### 🔄 Real-Time Sync
+- Data updates automatically  
+- No manual refresh required  
+- Always reflects latest records  
+""")
 
-    ml, vl, ccl, urgent, emergency, absence_total = get_absence_breakdown(df)
-    late_count = df["Leave Type"].str.contains("late", case=False).sum()
-    absence_rate = (absence_total / max(calendar_days,1)) * 100
-
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
-    c1.metric("ML", ml)
-    c2.metric("VL", vl)
-    c3.metric("CCL", ccl)
-    c4.metric("Urgent", urgent)
-    c5.metric("Emergency", emergency)
-    c6.metric("Total Absence", f"{absence_total} ({absence_rate:.2f}%)")
-
-    st.metric("Late Count", late_count)
-
-    # Comparison Chart
-    st.markdown("### 📊 Total Absence Comparison")
-
-    comparison_data = []
-    for person in staff_names:
-        person_df = df[df["Name"] == person]
-        _, _, _, _, _, total_abs = get_absence_breakdown(person_df)
-        comparison_data.append({"Name": person, "Total Absence": total_abs})
-
-    comparison_df = pd.DataFrame(comparison_data)
-
-    fig1 = px.bar(
-        comparison_df,
-        x="Name",
-        y="Total Absence",
-        text="Total Absence",
-        color="Name"
-    )
-
-    fig1.update_traces(textposition="outside")
-    fig1.update_layout(showlegend=False)
-
-    st.plotly_chart(fig1, use_container_width=True)
+st.divider()
 
 # ==================================================
-# 👤 STAFF TABS
+# WHO IS THIS FOR
 # ==================================================
-for i, person in enumerate(staff_names, start=1):
+st.subheader("👥 Who Is This For")
 
-    with tabs[i]:
+st.write("""
+This system is intended for:
 
-        st.markdown(f"### 👤 {person}")
+- IT Administrators  
+- ICT Managers  
+- Technical Support Teams  
 
-        person_df = df[df["Name"] == person]
+It provides a quick overview of system health and highlights areas that require attention.
+""")
 
-        ml, vl, ccl, urgent, emergency, absence_total = get_absence_breakdown(person_df)
-        late_count = person_df["Leave Type"].str.contains("late", case=False).sum()
+# ==================================================
+# HOW TO USE
+# ==================================================
+st.subheader("🚀 How to Use")
 
-        absence_rate = (absence_total / max(calendar_days,1)) * 100
+st.write("""
+Use the navigation menu on the left to access different modules:
 
-        c1, c2, c3, c4, c5, c6 = st.columns(6)
-        c1.metric("ML", ml)
-        c2.metric("VL", vl)
-        c3.metric("CCL", ccl)
-        c4.metric("Urgent", urgent)
-        c5.metric("Emergency", emergency)
-        c6.metric("Total Absence", f"{absence_total} ({absence_rate:.2f}%)")
+- **Inventory** → View all devices  
+- **Patching Report** → Monitor patching status  
+- **Upgrade** → Track upgrade progress  
 
-        st.metric("Late Count", late_count)
+Each page provides detailed insights and data visualisation.
+""")
 
-        # Monthly Chart
-        st.markdown("### 📈 Monthly")
+st.divider()
 
-        temp = person_df.copy()
-        temp["Month"] = temp["Date"].dt.to_period("M").dt.to_timestamp()
-
-        monthly = temp.groupby("Month").size().reset_index(name="Count")
-
-        full_range = pd.date_range(start=start_date, end=today, freq="MS")
-        full_df = pd.DataFrame({"Month": full_range})
-
-        monthly = full_df.merge(monthly, on="Month", how="left").fillna(0)
-        monthly["Month_str"] = monthly["Month"].dt.strftime("%b %Y")
-
-        fig = px.bar(monthly, x="Month_str", y="Count", text="Count")
-
-        fig.update_traces(textposition="outside")
-        fig.update_layout(xaxis_tickangle=-45)
-
-        st.plotly_chart(fig, use_container_width=True)
+# ==================================================
+# FOOTER
+# ==================================================
+st.caption("FVPS Inventory System • Powered by Streamlit & Google Sheets")

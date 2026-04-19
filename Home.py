@@ -1,12 +1,16 @@
 import streamlit as st
 
 # ==================================================
-# CONFIG
+# CONFIG (USE IMAGE AS FAVICON)
 # ==================================================
-st.set_page_config(page_title="FVPS Inventory System", layout="wide")
+st.set_page_config(
+    page_title="FVPS Inventory System",
+    page_icon="inventory.png",   # 🔥 your favicon
+    layout="wide"
+)
 
 # ==================================================
-# HEADER (WITH LOGO)
+# HEADER (LOGO + TITLE)
 # ==================================================
 col1, col2 = st.columns([1, 6])
 
@@ -18,7 +22,6 @@ with col2:
     st.caption("A centralised platform for device tracking, patching and upgrades")
 
 st.divider()
-
 
 # ==================================================
 # ABOUT

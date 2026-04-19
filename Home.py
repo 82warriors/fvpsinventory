@@ -6,15 +6,6 @@ from datetime import datetime
 from pathlib import Path
 
 # ==================================================
-# PAGE CONFIG
-# ==================================================
-st.set_page_config(
-    page_title="FVPS Dashboard",
-    page_icon="🔴",
-    layout="wide"
-)
-
-# ==================================================
 # HIDE STREAMLIT UI
 # ==================================================
 st.markdown("""

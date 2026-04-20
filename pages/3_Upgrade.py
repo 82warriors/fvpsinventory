@@ -8,16 +8,15 @@ from datetime import datetime
 st.set_page_config(page_title="Upgrade Tracking", layout="wide")
 
 st.title("⬆️ Upgrade Status Dashboard")
-st.caption("Always pulls the latest worksheet automatically")
+st.caption("Auto-detect latest worksheet (NO API key)")
 
 # ==============================
 # CONFIG
 # ==============================
 SPREADSHEET_ID = "1x4EP6dO3FpkFRMBXqHDku0pl4vtHrWnE1S3J-e86vt0"
-API_KEY = "YOUR_GOOGLE_API_KEY"  # 🔴 replace
 
 # ==============================
-# FLEXIBLE DATE PARSER
+# DATE PARSER
 # ==============================
 def parse_sheet_date(title):
     title = title.strip()
@@ -29,18 +28,17 @@ def parse_sheet_date(title):
         "%d-%B-%Y"
     ]
 
-    # Extract date-like part
     match = re.search(r"\d{1,2}[\s\-][A-Za-z]+[\s\-]\d{3,4}", title)
     if not match:
         return None
 
     text = match.group(0)
 
-    # Fix 3-digit year (206 → 2026)
     parts = re.split(r"[\s\-]", text)
     if parts[-1].isdigit() and len(parts[-1]) == 3:
         parts[-1] = "2" + parts[-1]
-        text = " ".join(parts)
+
+    text = " ".join(parts)
 
     for fmt in formats:
         try:
@@ -51,44 +49,76 @@ def parse_sheet_date(title):
     return None
 
 # ==============================
-# GET LATEST SHEET (CACHED)
+# SCRAPE SHEET LIST (NO API)
 # ==============================
 @st.cache_data(ttl=300)
-def get_latest_sheet(spreadsheet_id, api_key):
-    meta_url = f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}?key={api_key}"
-    res = requests.get(meta_url).json()
+def get_sheets_no_api(spreadsheet_id):
+    url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit"
 
-    sheets = res.get("sheets", [])
-    valid_sheets = []
+    res = requests.get(url)
 
-    for s in sheets:
-        title = s["properties"]["title"]
-        gid = s["properties"]["sheetId"]
+    if res.status_code != 200:
+        return None, "Failed to access sheet (check sharing settings)"
 
-        parsed_date = parse_sheet_date(title)
+    html = res.text
 
-        if parsed_date:
-            valid_sheets.append((parsed_date, title, gid))
+    # 🔥 Extract sheet titles + gid
+    matches = re.findall(r'"sheetId":(\d+),"title":"(.*?)"', html)
 
-    # ✅ If found valid dated sheets → pick latest
-    if valid_sheets:
-        latest = sorted(valid_sheets, key=lambda x: x[0], reverse=True)[0]
-        return latest[1], latest[2]
+    if not matches:
+        return None, "No sheets found in HTML"
 
-    # ⚠️ Fallback → use last sheet
-    last_sheet = sheets[-1]
-    return last_sheet["properties"]["title"], last_sheet["properties"]["sheetId"]
+    sheets = [(title, gid) for gid, title in matches]
+
+    return sheets, None
+
+# ==============================
+# FIND LATEST SHEET
+# ==============================
+def get_latest_sheet(sheets):
+    valid = []
+
+    for title, gid in sheets:
+        dt = parse_sheet_date(title)
+        if dt:
+            valid.append((dt, title, gid))
+
+    if valid:
+        latest = sorted(valid, key=lambda x: x[0], reverse=True)[0]
+        return latest[1], latest[2], None
+
+    # fallback → last sheet
+    last = sheets[-1]
+    return last[0], last[1], "No dated sheet found, using last sheet"
+
+# ==============================
+# LOAD SHEET LIST
+# ==============================
+sheets, error = get_sheets_no_api(SPREADSHEET_ID)
+
+if error:
+    st.error(error)
+    st.stop()
+
+sheet_name, GID, warn = get_latest_sheet(sheets)
+
+if warn:
+    st.warning(warn)
+
+st.info(f"📄 Data Source: {sheet_name}")
 
 # ==============================
 # LOAD DATA
 # ==============================
-sheet_name, GID = get_latest_sheet(SPREADSHEET_ID, API_KEY)
+csv_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid={GID}"
 
-url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid={GID}"
+try:
+    df = pd.read_csv(csv_url, dtype=str)
+except Exception as e:
+    st.error("❌ Failed to load data")
+    st.write(str(e))
+    st.stop()
 
-st.info(f"📄 Data Source: {sheet_name}")
-
-df = pd.read_csv(url, dtype=str)
 df.columns = df.columns.astype(str).str.strip().str.upper()
 
 # ==============================
@@ -180,28 +210,19 @@ chart_df["Percent"] = (chart_df["Count"] / chart_df["Total"] * 100).round(1)
 chart_df["Label"] = chart_df["Percent"].astype(str) + "%"
 
 base = alt.Chart(chart_df).encode(
-    x=alt.X("MODEL:N", title="Model"),
-    y=alt.Y("Count:Q", title="Number of Devices"),
+    x=alt.X("MODEL:N"),
+    y=alt.Y("Count:Q"),
     xOffset="Status:N"
 )
 
-bars = base.mark_bar().encode(
-    color=alt.Color("Status:N", title="")
-)
+bars = base.mark_bar().encode(color="Status:N")
 
-text = base.mark_text(
-    dy=-5,
-    fontSize=12
-).encode(
-    text="Label"
-)
+text = base.mark_text(dy=-5).encode(text="Label")
 
-chart = (bars + text).properties(height=400)
-
-st.altair_chart(chart, use_container_width=True)
+st.altair_chart((bars + text).properties(height=400), use_container_width=True)
 
 # ==============================
-# PROGRESS BARS
+# PROGRESS
 # ==============================
 st.markdown("## 🔄 Progress by Model")
 

@@ -1,125 +1,37 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-import requests
-import re
-from datetime import datetime
-
-st.set_page_config(page_title="Upgrade Tracking", layout="wide")
-
-st.title("⬆️ Upgrade Status Dashboard")
-st.caption("Auto-detect latest worksheet (NO API key)")
 
 # ==============================
 # CONFIG
 # ==============================
+st.set_page_config(page_title="Upgrade Tracking", layout="wide")
+
+st.title("⬆️ Upgrade Status Dashboard")
+st.caption("Auto-updated from LATEST sheet")
+
 SPREADSHEET_ID = "1x4EP6dO3FpkFRMBXqHDku0pl4vtHrWnE1S3J-e86vt0"
+GID = "YOUR_LATEST_GID"  # 🔴 replace with your LATEST sheet gid
+
+CSV_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid={GID}"
 
 # ==============================
-# DATE PARSER
+# LOAD DATA (CACHED)
 # ==============================
-def parse_sheet_date(title):
-    title = title.strip()
-
-    formats = [
-        "%d %b %Y",
-        "%d %B %Y",
-        "%d-%b-%Y",
-        "%d-%B-%Y"
-    ]
-
-    match = re.search(r"\d{1,2}[\s\-][A-Za-z]+[\s\-]\d{3,4}", title)
-    if not match:
-        return None
-
-    text = match.group(0)
-
-    parts = re.split(r"[\s\-]", text)
-    if parts[-1].isdigit() and len(parts[-1]) == 3:
-        parts[-1] = "2" + parts[-1]
-
-    text = " ".join(parts)
-
-    for fmt in formats:
-        try:
-            return datetime.strptime(text, fmt)
-        except:
-            continue
-
-    return None
-
-# ==============================
-# SCRAPE SHEET LIST (NO API)
-# ==============================
-@st.cache_data(ttl=300)
-def get_sheets_no_api(spreadsheet_id):
-    url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit"
-
-    res = requests.get(url)
-
-    if res.status_code != 200:
-        return None, "Failed to access sheet (check sharing settings)"
-
-    html = res.text
-
-    # 🔥 Extract sheet titles + gid
-    matches = re.findall(r'"sheetId":(\d+),"title":"(.*?)"', html)
-
-    if not matches:
-        return None, "No sheets found in HTML"
-
-    sheets = [(title, gid) for gid, title in matches]
-
-    return sheets, None
-
-# ==============================
-# FIND LATEST SHEET
-# ==============================
-def get_latest_sheet(sheets):
-    valid = []
-
-    for title, gid in sheets:
-        dt = parse_sheet_date(title)
-        if dt:
-            valid.append((dt, title, gid))
-
-    if valid:
-        latest = sorted(valid, key=lambda x: x[0], reverse=True)[0]
-        return latest[1], latest[2], None
-
-    # fallback → last sheet
-    last = sheets[-1]
-    return last[0], last[1], "No dated sheet found, using last sheet"
-
-# ==============================
-# LOAD SHEET LIST
-# ==============================
-sheets, error = get_sheets_no_api(SPREADSHEET_ID)
-
-if error:
-    st.error(error)
-    st.stop()
-
-sheet_name, GID, warn = get_latest_sheet(sheets)
-
-if warn:
-    st.warning(warn)
-
-st.info(f"📄 Data Source: {sheet_name}")
-
-# ==============================
-# LOAD DATA
-# ==============================
-csv_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid={GID}"
+@st.cache_data(ttl=60)
+def load_data(url):
+    df = pd.read_csv(url, dtype=str)
+    df.columns = df.columns.astype(str).str.strip().str.upper()
+    return df
 
 try:
-    df = pd.read_csv(csv_url, dtype=str)
+    df = load_data(CSV_URL)
 except Exception as e:
-    st.error("❌ Failed to load data")
-    st.write(str(e))
+    st.error("❌ Failed to load data from Google Sheet")
+    st.write(e)
     st.stop()
 
-df.columns = df.columns.astype(str).str.strip().str.upper()
+st.info("📄 Data Source: LATEST (auto-updated)")
 
 # ==============================
 # VALIDATION
@@ -132,7 +44,7 @@ REQUIRED_HEADERS = [
 
 if not all(h in df.columns for h in REQUIRED_HEADERS):
     st.error("❌ Required headers missing")
-    st.write(df.columns.tolist())
+    st.write("Detected columns:", df.columns.tolist())
     st.stop()
 
 # ==============================
@@ -179,10 +91,10 @@ not_completed = int(summary["Not Completed"].sum())
 total = completed + not_completed
 rate = (completed/total*100) if total>0 else 0
 
-c1,c2,c3 = st.columns(3)
-c1.metric("✅ Completed",completed)
-c2.metric("❌ Not Completed",not_completed)
-c3.metric("📈 Completion Rate",f"{rate:.2f}%")
+c1, c2, c3 = st.columns(3)
+c1.metric("✅ Completed", completed)
+c2.metric("❌ Not Completed", not_completed)
+c3.metric("📈 Completion Rate", f"{rate:.2f}%")
 
 # ==============================
 # TABLE
@@ -210,22 +122,31 @@ chart_df["Percent"] = (chart_df["Count"] / chart_df["Total"] * 100).round(1)
 chart_df["Label"] = chart_df["Percent"].astype(str) + "%"
 
 base = alt.Chart(chart_df).encode(
-    x=alt.X("MODEL:N"),
-    y=alt.Y("Count:Q"),
+    x=alt.X("MODEL:N", title="Model"),
+    y=alt.Y("Count:Q", title="Number of Devices"),
     xOffset="Status:N"
 )
 
-bars = base.mark_bar().encode(color="Status:N")
+bars = base.mark_bar().encode(
+    color=alt.Color("Status:N", title="")
+)
 
-text = base.mark_text(dy=-5).encode(text="Label")
+text = base.mark_text(
+    dy=-5,
+    fontSize=12
+).encode(
+    text="Label"
+)
 
-st.altair_chart((bars + text).properties(height=400), use_container_width=True)
+chart = (bars + text).properties(height=400)
+
+st.altair_chart(chart, use_container_width=True)
 
 # ==============================
-# PROGRESS
+# PROGRESS BARS
 # ==============================
 st.markdown("## 🔄 Progress by Model")
 
-for _,row in summary.iterrows():
+for _, row in summary.iterrows():
     st.write(f"**{row['MODEL']}** ({row['Completion %']}%)")
     st.progress(row["Completion %"]/100)

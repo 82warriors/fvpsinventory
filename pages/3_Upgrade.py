@@ -132,6 +132,41 @@ st.dataframe(
 )
 
 # ==============================
+# 🎯 ADMIN NOT COMPLETED (L13 YOGA G4)
+# ==============================
+st.markdown("## 🚨 Admin Devices Not Completed (Lenovo L13 Yoga G4)")
+
+filtered = df[
+    (df["MODEL"] == "LENOVO L13 YOGA G4") &
+    (df["CATEGORY"] == "ADMIN") &
+    (df["IPU STATUS"] == "Not Completed")
+]
+
+if filtered.empty:
+    st.success("✅ No pending admin devices for Lenovo L13 Yoga G4")
+else:
+    # Group by custodian
+    custodian_summary = (
+        filtered.groupby("CUSTODIAN")
+        .size()
+        .reset_index(name="Device Count")
+        .sort_values(by="Device Count", ascending=False)
+    )
+
+    st.markdown("### 📊 Devices by Custodian")
+    st.dataframe(custodian_summary, use_container_width=True, hide_index=True)
+
+    # Show detailed list
+    st.markdown("### 📋 Detailed List")
+    st.dataframe(
+        filtered[
+            ["CUSTODIAN", "HOSTNAME", "SERIAL NUMBER", "ASSET TAG", "LOCATION"]
+        ],
+        use_container_width=True,
+        hide_index=True
+    )
+
+# ==============================
 # CHART
 # ==============================
 st.markdown("## 📈 Upgrade Progress")

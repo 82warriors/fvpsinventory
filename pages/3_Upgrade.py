@@ -153,8 +153,7 @@ else:
         .sort_values(by="Device Count", ascending=False)
     )
 
-    st.markdown("### 📊 Devices by Custodian")
-    st.dataframe(custodian_summary, use_container_width=True, hide_index=True)
+
 
     # Show detailed list
     st.markdown("### 📋 Detailed List")

@@ -176,9 +176,6 @@ def show_admin_not_completed(model_name, display_name):
         .sort_values(by="Device Count", ascending=False)
     )
 
-    st.markdown("### 📊 Devices by Custodian")
-    st.dataframe(custodian_summary, use_container_width=True, hide_index=True)
-
     st.markdown("### 📋 Detailed List")
     st.dataframe(
         filtered[

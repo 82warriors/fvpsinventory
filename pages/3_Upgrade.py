@@ -52,6 +52,13 @@ st.success("✅ Data loaded successfully")
 st.info("📄 Data Source: LATEST (auto-updated)")
 
 # ==============================
+# MANUAL REFRESH BUTTON
+# ==============================
+if st.button("🔄 Refresh Now"):
+    st.cache_data.clear()
+    st.rerun()
+
+# ==============================
 # VALIDATION
 # ==============================
 REQUIRED_HEADERS = [
@@ -169,9 +176,4 @@ for _, row in summary.iterrows():
     st.write(f"**{row['MODEL']}** ({row['Completion %']}%)")
     st.progress(row["Completion %"]/100)
 
-# ==============================
-# MANUAL REFRESH BUTTON
-# ==============================
-if st.button("🔄 Refresh Now"):
-    st.cache_data.clear()
-    st.rerun()
+

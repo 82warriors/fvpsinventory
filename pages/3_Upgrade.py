@@ -13,12 +13,12 @@ st.title("⬆️ Upgrade Status Dashboard")
 st.caption("Auto-updated from LATEST sheet")
 
 SPREADSHEET_ID = "1x4EP6dO3FpkFRMBXqHDku0pl4vtHrWnE1S3J-e86vt0"
-GID = "1946114847"  # ✅ your LATEST sheet
+GID = "1946114847"
 
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&gid={GID}"
 
 # ==============================
-# LOAD DATA (SAFE)
+# LOAD DATA
 # ==============================
 @st.cache_data(ttl=60)
 def load_data(url):
@@ -45,18 +45,11 @@ df, error = load_data(CSV_URL)
 if error:
     st.error("❌ Failed to load data")
     st.warning(error)
-    st.info("👉 Make sure Google Sheet is set to: Anyone with link → Viewer")
+    st.info("👉 Ensure Google Sheet is set to: Anyone with link → Viewer")
     st.stop()
 
 st.success("✅ Data loaded successfully")
 st.info("📄 Data Source: LATEST (auto-updated)")
-
-# ==============================
-# MANUAL REFRESH BUTTON
-# ==============================
-if st.button("🔄 Refresh Now"):
-    st.cache_data.clear()
-    st.rerun()
 
 # ==============================
 # VALIDATION
@@ -69,8 +62,15 @@ REQUIRED_HEADERS = [
 
 if not all(h in df.columns for h in REQUIRED_HEADERS):
     st.error("❌ Required headers missing")
-    st.write("Detected columns:", df.columns.tolist())
+    st.write(df.columns.tolist())
     st.stop()
+
+# ==============================
+# CLEAN DATA
+# ==============================
+df["MODEL"] = df["MODEL"].astype(str).str.upper().str.strip()
+df["IPU STATUS"] = df["IPU STATUS"].astype(str).str.title().str.strip()
+df["CATEGORY"] = df["CATEGORY"].astype(str).str.upper().str.strip()
 
 # ==============================
 # RAW DATA
@@ -79,23 +79,17 @@ st.markdown("## 🗂️ Full Updated Data")
 st.dataframe(df, use_container_width=True)
 
 # ==============================
-# CLEAN DATA
+# SUMMARY
 # ==============================
-df["MODEL"] = df["MODEL"].astype(str).str.upper().str.strip()
-df["IPU STATUS"] = df["IPU STATUS"].astype(str).str.title().str.strip()
-
 TARGET_MODELS = [
     "ACER VX2670G DESKTOP",
     "LENOVO K14 GEN2",
     "LENOVO L13 YOGA G4"
 ]
 
-df = df[df["MODEL"].isin(TARGET_MODELS)]
+df_filtered = df[df["MODEL"].isin(TARGET_MODELS)]
 
-# ==============================
-# SUMMARY
-# ==============================
-summary = df.groupby(["MODEL","IPU STATUS"]).size().unstack(fill_value=0)
+summary = df_filtered.groupby(["MODEL","IPU STATUS"]).size().unstack(fill_value=0)
 
 for col in ["Completed","Not Completed"]:
     if col not in summary.columns:
@@ -132,40 +126,6 @@ st.dataframe(
 )
 
 # ==============================
-# 🎯 ADMIN NOT COMPLETED (L13 YOGA G4)
-# ==============================
-st.markdown("## 🚨 Admin Devices Not Completed (Lenovo L13 Yoga G4)")
-
-filtered = df[
-    (df["MODEL"] == "LENOVO L13 YOGA G4") &
-    (df["CATEGORY"] == "ADMIN") &
-    (df["IPU STATUS"] == "Not Completed")
-]
-
-if filtered.empty:
-    st.success("✅ No pending admin devices for Lenovo L13 Yoga G4")
-else:
-    # Group by custodian
-    custodian_summary = (
-        filtered.groupby("CUSTODIAN")
-        .size()
-        .reset_index(name="Device Count")
-        .sort_values(by="Device Count", ascending=False)
-    )
-
-
-
-    # Show detailed list
-    st.markdown("### 📋 Detailed List")
-    st.dataframe(
-        filtered[
-            ["CUSTODIAN", "HOSTNAME", "SERIAL NUMBER", "ASSET TAG", "LOCATION"]
-        ],
-        use_container_width=True,
-        hide_index=True
-    )
-
-# ==============================
 # CHART
 # ==============================
 st.markdown("## 📈 Upgrade Progress")
@@ -181,33 +141,62 @@ chart_df["Percent"] = (chart_df["Count"] / chart_df["Total"] * 100).round(1)
 chart_df["Label"] = chart_df["Percent"].astype(str) + "%"
 
 base = alt.Chart(chart_df).encode(
-    x=alt.X("MODEL:N", title="Model"),
-    y=alt.Y("Count:Q", title="Number of Devices"),
+    x=alt.X("MODEL:N"),
+    y=alt.Y("Count:Q"),
     xOffset="Status:N"
 )
 
-bars = base.mark_bar().encode(
-    color=alt.Color("Status:N", title="")
-)
+bars = base.mark_bar().encode(color="Status:N")
+text = base.mark_text(dy=-5).encode(text="Label")
 
-text = base.mark_text(
-    dy=-5,
-    fontSize=12
-).encode(
-    text="Label"
-)
-
-chart = (bars + text).properties(height=400)
-
-st.altair_chart(chart, use_container_width=True)
+st.altair_chart((bars + text).properties(height=400), use_container_width=True)
 
 # ==============================
-# PROGRESS BARS
+# 🚨 FUNCTION: ADMIN NOT COMPLETED
 # ==============================
-st.markdown("## 🔄 Progress by Model")
+def show_admin_not_completed(model_name, display_name):
+    st.markdown(f"## 🚨 Admin Devices Not Completed ({display_name})")
 
-for _, row in summary.iterrows():
-    st.write(f"**{row['MODEL']}** ({row['Completion %']}%)")
-    st.progress(row["Completion %"]/100)
+    filtered = df[
+        (df["MODEL"] == model_name) &
+        (df["CATEGORY"] == "ADMIN") &
+        (df["IPU STATUS"] == "Not Completed")
+    ]
 
+    if filtered.empty:
+        st.success(f"✅ No pending admin devices for {display_name}")
+        return
 
+    st.metric("Total Pending Devices", len(filtered))
+
+    custodian_summary = (
+        filtered.groupby("CUSTODIAN")
+        .size()
+        .reset_index(name="Device Count")
+        .sort_values(by="Device Count", ascending=False)
+    )
+
+    st.markdown("### 📊 Devices by Custodian")
+    st.dataframe(custodian_summary, use_container_width=True, hide_index=True)
+
+    st.markdown("### 📋 Detailed List")
+    st.dataframe(
+        filtered[
+            ["CUSTODIAN", "HOSTNAME", "SERIAL NUMBER", "ASSET TAG", "LOCATION"]
+        ],
+        use_container_width=True,
+        hide_index=True
+    )
+
+# ==============================
+# 🚨 RUN FOR BOTH MODELS
+# ==============================
+show_admin_not_completed("LENOVO L13 YOGA G4", "Lenovo L13 Yoga G4")
+show_admin_not_completed("LENOVO K14 GEN2", "Lenovo K14 Gen2")
+
+# ==============================
+# 🔄 REFRESH BUTTON
+# ==============================
+if st.button("🔄 Refresh Now"):
+    st.cache_data.clear()
+    st.rerun()

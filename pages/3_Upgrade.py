@@ -14,32 +14,46 @@ st.caption("Always pulls the latest worksheet automatically")
 # CONFIG
 # ==============================
 SPREADSHEET_ID = "1x4EP6dO3FpkFRMBXqHDku0pl4vtHrWnE1S3J-e86vt0"
-API_KEY = "YOUR_GOOGLE_API_KEY"  # 🔴 replace this
+API_KEY = "YOUR_GOOGLE_API_KEY"  # 🔴 replace
 
 # ==============================
-# DATE PARSER (robust)
+# FLEXIBLE DATE PARSER
 # ==============================
 def parse_sheet_date(title):
     title = title.strip()
 
-    match = re.match(r"(\d{1,2})\s+([A-Za-z]{3})\s+(\d{3,4})", title)
+    formats = [
+        "%d %b %Y",
+        "%d %B %Y",
+        "%d-%b-%Y",
+        "%d-%B-%Y"
+    ]
+
+    # Extract date-like part
+    match = re.search(r"\d{1,2}[\s\-][A-Za-z]+[\s\-]\d{3,4}", title)
     if not match:
         return None
 
-    day, month, year = match.groups()
+    text = match.group(0)
 
-    # Fix 3-digit year (e.g. 206 → 2026)
-    if len(year) == 3:
-        year = "2" + year
+    # Fix 3-digit year (206 → 2026)
+    parts = re.split(r"[\s\-]", text)
+    if parts[-1].isdigit() and len(parts[-1]) == 3:
+        parts[-1] = "2" + parts[-1]
+        text = " ".join(parts)
 
-    try:
-        return datetime.strptime(f"{day} {month} {year}", "%d %b %Y")
-    except:
-        return None
+    for fmt in formats:
+        try:
+            return datetime.strptime(text, fmt)
+        except:
+            continue
+
+    return None
 
 # ==============================
-# GET LATEST SHEET
+# GET LATEST SHEET (CACHED)
 # ==============================
+@st.cache_data(ttl=300)
 def get_latest_sheet(spreadsheet_id, api_key):
     meta_url = f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}?key={api_key}"
     res = requests.get(meta_url).json()
@@ -56,13 +70,14 @@ def get_latest_sheet(spreadsheet_id, api_key):
         if parsed_date:
             valid_sheets.append((parsed_date, title, gid))
 
-    if not valid_sheets:
-        st.error("❌ No valid dated sheets found")
-        st.stop()
+    # ✅ If found valid dated sheets → pick latest
+    if valid_sheets:
+        latest = sorted(valid_sheets, key=lambda x: x[0], reverse=True)[0]
+        return latest[1], latest[2]
 
-    latest = sorted(valid_sheets, key=lambda x: x[0], reverse=True)[0]
-
-    return latest[1], latest[2]
+    # ⚠️ Fallback → use last sheet
+    last_sheet = sheets[-1]
+    return last_sheet["properties"]["title"], last_sheet["properties"]["sheetId"]
 
 # ==============================
 # LOAD DATA

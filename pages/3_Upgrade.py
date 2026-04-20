@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+import requests
+import io
 
 # ==============================
 # CONFIG
@@ -11,26 +13,42 @@ st.title("⬆️ Upgrade Status Dashboard")
 st.caption("Auto-updated from LATEST sheet")
 
 SPREADSHEET_ID = "1x4EP6dO3FpkFRMBXqHDku0pl4vtHrWnE1S3J-e86vt0"
-GID = "YOUR_LATEST_GID"  # 🔴 replace with your LATEST sheet gid
+GID = "1946114847"  # ✅ your LATEST sheet
 
-CSV_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid={GID}"
+CSV_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&gid={GID}"
 
 # ==============================
-# LOAD DATA (CACHED)
+# LOAD DATA (SAFE)
 # ==============================
 @st.cache_data(ttl=60)
 def load_data(url):
-    df = pd.read_csv(url, dtype=str)
-    df.columns = df.columns.astype(str).str.strip().str.upper()
-    return df
+    try:
+        res = requests.get(url)
 
-try:
-    df = load_data(CSV_URL)
-except Exception as e:
-    st.error("❌ Failed to load data from Google Sheet")
-    st.write(e)
+        if res.status_code != 200:
+            return None, f"HTTP Error {res.status_code}"
+
+        if "text/html" in res.headers.get("Content-Type", ""):
+            return None, "Google returned HTML → check sharing permissions"
+
+        df = pd.read_csv(io.StringIO(res.text), dtype=str)
+        df.columns = df.columns.astype(str).str.strip().str.upper()
+
+        return df, None
+
+    except Exception as e:
+        return None, str(e)
+
+
+df, error = load_data(CSV_URL)
+
+if error:
+    st.error("❌ Failed to load data")
+    st.warning(error)
+    st.info("👉 Make sure Google Sheet is set to: Anyone with link → Viewer")
     st.stop()
 
+st.success("✅ Data loaded successfully")
 st.info("📄 Data Source: LATEST (auto-updated)")
 
 # ==============================
@@ -89,7 +107,7 @@ st.markdown("## 📊 Overview")
 completed = int(summary["Completed"].sum())
 not_completed = int(summary["Not Completed"].sum())
 total = completed + not_completed
-rate = (completed/total*100) if total>0 else 0
+rate = (completed/total*100) if total > 0 else 0
 
 c1, c2, c3 = st.columns(3)
 c1.metric("✅ Completed", completed)
@@ -150,3 +168,10 @@ st.markdown("## 🔄 Progress by Model")
 for _, row in summary.iterrows():
     st.write(f"**{row['MODEL']}** ({row['Completion %']}%)")
     st.progress(row["Completion %"]/100)
+
+# ==============================
+# MANUAL REFRESH BUTTON
+# ==============================
+if st.button("🔄 Refresh Now"):
+    st.cache_data.clear()
+    st.rerun()

@@ -104,4 +104,4 @@ st.divider()
 # ==================================================
 # FOOTER
 # ==================================================
-st.caption("FVPS Inventory System • Powered by Streamlit & Google Sheets")
+st.caption("FVPS Inventory System @Copyright2026FVPS")

@@ -1,11 +1,11 @@
 import streamlit as st
 
 # ==================================================
-# CONFIG (USE IMAGE AS FAVICON)
+# CONFIG (FAVICON)
 # ==================================================
 st.set_page_config(
     page_title="FVPS Inventory System",
-    page_icon="inventory.png",   # 🔥 your favicon
+    page_icon="inventory.png",
     layout="wide"
 )
 
@@ -37,6 +37,9 @@ It integrates directly with Google Sheets to deliver **real-time updates** on:
 - Device patching status  
 - Upgrade progress  
 - Inventory tracking  
+
+The goal is to provide clear visibility and help IT teams make faster, informed decisions.
+""")
 
 # ==================================================
 # KEY FEATURES

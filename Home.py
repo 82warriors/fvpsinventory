@@ -38,9 +38,6 @@ It integrates directly with Google Sheets to deliver **real-time updates** on:
 - Upgrade progress  
 - Inventory tracking  
 
-The goal is to provide clear visibility and help IT teams make faster, informed decisions.
-""")
-
 # ==================================================
 # KEY FEATURES
 # ==================================================
@@ -83,21 +80,6 @@ with col4:
 """)
 
 st.divider()
-
-# ==================================================
-# WHO IS THIS FOR
-# ==================================================
-st.subheader("👥 Who Is This For")
-
-st.write("""
-This system is intended for:
-
-- IT Administrators  
-- ICT Managers  
-- Technical Support Teams  
-
-It provides a quick overview of system health and highlights areas that require attention.
-""")
 
 # ==================================================
 # HOW TO USE

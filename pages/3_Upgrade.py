@@ -179,7 +179,7 @@ def show_admin_not_completed(model_name, display_name):
     st.markdown("### 📋 Detailed List")
     st.dataframe(
         filtered[
-            ["CUSTODIAN", "HOSTNAME", "SERIAL NUMBER", "ASSET TAG", "LOCATION"]
+            ["CUSTODIAN", "HOSTNAME", "SERIAL NUMBER", "ASSET TAG", "LOCATION", "CATEGORY", "IPU STATUS"]
         ],
         use_container_width=True,
         hide_index=True

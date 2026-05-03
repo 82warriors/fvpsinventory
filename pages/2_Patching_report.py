@@ -12,7 +12,7 @@ st.set_page_config(page_title="Patching Report", layout="wide")
 SPREADSHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
 
 st.title("🛠️ Patching Report Dashboard")
-st.caption("Live device health monitoring")
+st.caption("Weekly device health monitoring")
 
 # ==================================================
 # AUTO REFRESH (30 sec)
@@ -27,22 +27,22 @@ if time.time() - st.session_state.last_refresh > REFRESH_INTERVAL:
     st.rerun()
 
 # ==================================================
-# GET META
+# GET ALL SHEET NAMES
 # ==================================================
-@st.cache_data(ttl=30)
-def get_latest_sheet():
+@st.cache_data(ttl=60)
+def get_all_sheets():
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=META"
     df = pd.read_csv(url, header=None)
 
-    if df.shape[0] < 2:
-        raise Exception("META sheet missing data")
+    # Assume all rows from row 2 onwards are sheet names
+    sheets = df.iloc[1:, 0].dropna().tolist()
 
-    return str(df.iloc[1, 0]).strip()
+    return [str(s).strip() for s in sheets]
 
 # ==================================================
 # LOAD SHEET
 # ==================================================
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=60)
 def load_sheet(sheet_name):
     encoded = urllib.parse.quote(sheet_name)
 
@@ -50,18 +50,13 @@ def load_sheet(sheet_name):
 
     df = pd.read_csv(url, dtype=str)
 
-    if df.empty:
-        raise Exception("Sheet is empty")
-
     df.columns = df.columns.str.strip().str.upper()
-
-    for col in df.columns:
-        df[col] = df[col].astype(str).str.strip()
+    df = df.apply(lambda x: x.astype(str).str.strip())
 
     return df
 
 # ==================================================
-# DEVICE CALCULATION (WITH UNKNOWN)
+# DEVICE CALCULATION
 # ==================================================
 def device_status_count(df):
     devices = [
@@ -103,116 +98,90 @@ def device_status_count(df):
     return pd.DataFrame(result)
 
 # ==================================================
-# LOAD DATA
+# LOAD ALL DATA
 # ==================================================
 try:
-    sheet_name = get_latest_sheet()
-    df = load_sheet(sheet_name)
-
-    st.success(f"📅 Latest Data: {sheet_name}")
-
+    sheet_list = get_all_sheets()
 except Exception as e:
-    st.error("❌ Failed to load data")
+    st.error("❌ Failed to load sheet list")
     st.exception(e)
     st.stop()
 
 # ==================================================
-# TABLE
+# DISPLAY EACH WEEK
 # ==================================================
-device_df = device_status_count(df)
+for sheet_name in sheet_list[::-1]:  # latest on top
 
-device_df.columns = [
-    "Device",
-    "Installed",
-    "SCCM > 4 wks",
-    "Not Connected",
-    "Required",
-    "Unknown",
-    "Total",
-    "% Installed"
-]
+    st.divider()
+    st.subheader(f"📅 Week: {sheet_name}")
 
-# Format % to 2 decimal places
-device_df["% Installed"] = device_df["% Installed"].map(lambda x: f"{x:.2f}")
+    try:
+        df = load_sheet(sheet_name)
+        device_df = device_status_count(df)
 
-st.subheader("💻 Device Status Breakdown")
+        # Rename columns
+        device_df.columns = [
+            "Device",
+            "Installed",
+            "SCCM > 4 wks",
+            "Not Connected",
+            "Required",
+            "Unknown",
+            "Total",
+            "% Installed"
+        ]
 
-styled_df = (
-    device_df.style
-    .hide(axis="index")
-    .set_properties(**{"text-align": "center"})
-    .set_table_styles([
-        {
-            "selector": "th",
-            "props": [
-                ("font-weight", "bold"),
-                ("color", "black"),
-                ("text-align", "center")
-            ]
-        }
-    ])
-    .highlight_min(subset=["% Installed"], color="#f28b82")
-    .highlight_max(subset=["Unknown"], color="#d3d3d3")  # highlight unknown
-)
+        # Format %
+        device_df["% Installed"] = device_df["% Installed"].map(lambda x: f"{x:.2f}")
 
-st.table(styled_df)
+        # =========================
+        # TABLE
+        # =========================
+        styled_df = (
+            device_df.style
+            .hide(axis="index")
+            .set_properties(**{"text-align": "center"})
+            .highlight_min(subset=["% Installed"], color="#f28b82")
+            .highlight_max(subset=["Unknown"], color="#d3d3d3")
+        )
 
-# ==================================================
-# 📊 PROFESSIONAL CHART (WITH UNKNOWN)
-# ==================================================
-st.subheader("📊 Status Distribution")
+        st.table(styled_df)
 
-chart_df = device_df.set_index("Device")[[
-    "Installed",
-    "SCCM > 4 wks",
-    "Not Connected",
-    "Required",
-    "Unknown"
-]].astype(int)
+        # =========================
+        # CHART
+        # =========================
+        chart_df = device_df.set_index("Device")[[
+            "Installed",
+            "SCCM > 4 wks",
+            "Not Connected",
+            "Required",
+            "Unknown"
+        ]].astype(int)
 
-long_df = chart_df.reset_index().melt(
-    id_vars="Device",
-    var_name="Status",
-    value_name="Count"
-)
+        long_df = chart_df.reset_index().melt(
+            id_vars="Device",
+            var_name="Status",
+            value_name="Count"
+        )
 
-color_scale = alt.Scale(
-    domain=[
-        "Installed",
-        "SCCM > 4 wks",
-        "Not Connected",
-        "Required",
-        "Unknown"
-    ],
-    range=[
-        "#2ecc71",  # green
-        "#f39c12",  # orange
-        "#e74c3c",  # red
-        "#3498db",  # blue
-        "#95a5a6"   # grey
-    ]
-)
+        chart = (
+            alt.Chart(long_df)
+            .mark_bar(size=30)
+            .encode(
+                x="Device:N",
+                xOffset="Status:N",
+                y="Count:Q",
+                color="Status:N",
+                tooltip=["Device", "Status", "Count"]
+            )
+            .properties(height=300)
+        )
 
-chart = (
-    alt.Chart(long_df)
-    .mark_bar(size=35)
-    .encode(
-        x=alt.X("Device:N"),
-        xOffset="Status:N",
-        y=alt.Y("Count:Q"),
-        color=alt.Color("Status:N", scale=color_scale),
-        tooltip=["Device", "Status", "Count"]
-    )
-    .properties(height=400)
-)
+        st.altair_chart(chart, use_container_width=True)
 
-st.altair_chart(chart, use_container_width=True)
-
-# ==================================================
-# RAW DATA
-# ==================================================
-st.subheader("📄 Raw Data")
-st.dataframe(df, use_container_width=True)
+    except Exception as e:
+        st.warning(f"⚠️ Failed to load {sheet_name}")
+        st.exception(e)
 
 # ==================================================
 # FOOTER

@@ -18,6 +18,13 @@ GID = "1946114847"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&gid={GID}"
 
 # ==============================
+# 🔄 REFRESH BUTTON
+# ==============================
+if st.button("🔄 Refresh Now"):
+    st.cache_data.clear()
+    st.rerun()
+
+# ==============================
 # LOAD DATA
 # ==============================
 @st.cache_data(ttl=60)
@@ -71,12 +78,6 @@ if not all(h in df.columns for h in REQUIRED_HEADERS):
 df["MODEL"] = df["MODEL"].astype(str).str.upper().str.strip()
 df["IPU STATUS"] = df["IPU STATUS"].astype(str).str.title().str.strip()
 df["CATEGORY"] = df["CATEGORY"].astype(str).str.upper().str.strip()
-
-# ==============================
-# RAW DATA
-# ==============================
-st.markdown("## 🗂️ Full Updated Data")
-st.dataframe(df, use_container_width=True)
 
 # ==============================
 # SUMMARY
@@ -192,8 +193,8 @@ show_admin_not_completed("LENOVO L13 YOGA G4", "Lenovo L13 Yoga G4")
 show_admin_not_completed("LENOVO K14 GEN2", "Lenovo K14 Gen2")
 
 # ==============================
-# 🔄 REFRESH BUTTON
+# RAW DATA
 # ==============================
-if st.button("🔄 Refresh Now"):
-    st.cache_data.clear()
-    st.rerun()
+st.markdown("## 🗂️ Full Updated Data")
+st.dataframe(df, use_container_width=True)
+

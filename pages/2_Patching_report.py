@@ -34,9 +34,6 @@ def get_latest_sheet():
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=META"
     df = pd.read_csv(url, header=None)
 
-    if df.shape[0] < 2:
-        raise Exception("META sheet missing data")
-
     return str(df.iloc[1, 0]).strip()
 
 # ==================================================
@@ -60,9 +57,6 @@ def load_sheet(sheet_name):
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={encoded}"
 
     df = pd.read_csv(url, dtype=str)
-
-    if df.empty:
-        raise Exception("Sheet is empty")
 
     df.columns = df.columns.str.strip().str.upper()
     df = df.apply(lambda x: x.astype(str).str.strip())
@@ -114,16 +108,10 @@ def device_status_count(df):
 # ==================================================
 # LOAD LATEST DATA
 # ==================================================
-try:
-    sheet_name = get_latest_sheet()
-    df = load_sheet(sheet_name)
+sheet_name = get_latest_sheet()
+df = load_sheet(sheet_name)
 
-    st.success(f"📅 Latest Data: {sheet_name}")
-
-except Exception as e:
-    st.error("❌ Failed to load data")
-    st.exception(e)
-    st.stop()
+st.success(f"📅 Latest Data: {sheet_name}")
 
 # ==================================================
 # LATEST TABLE
@@ -145,24 +133,7 @@ device_df["% Installed"] = device_df["% Installed"].map(lambda x: f"{x:.2f}")
 
 st.subheader("💻 Device Status Breakdown")
 
-styled_df = (
-    device_df.style
-    .hide(axis="index")
-    .set_properties(**{"text-align": "center"})
-    .set_table_styles([
-        {
-            "selector": "th",
-            "props": [
-                ("font-weight", "bold"),
-                ("text-align", "center")
-            ]
-        }
-    ])
-    .highlight_min(subset=["% Installed"], color="#f28b82")
-    .highlight_max(subset=["Unknown"], color="#d3d3d3")
-)
-
-st.table(styled_df)
+st.dataframe(device_df, use_container_width=True)
 
 # ==================================================
 # CHART
@@ -199,81 +170,83 @@ chart = (
 st.altair_chart(chart, use_container_width=True)
 
 # ==================================================
-# 📅 WEEKLY DEVICE BREAKDOWN
+# 📅 CONSOLIDATED WEEKLY DATA
 # ==================================================
-st.subheader("📅 Weekly Device Breakdown")
+st.subheader("📅 Weekly Device Overview")
 
-try:
-    sheet_list = get_all_sheets()
-except:
-    st.error("Failed to load sheet list")
-    st.stop()
+sheet_list = get_all_sheets()
 
-devices = [
-    "Lenovo K14 Gen2",
-    "Lenovo L13 Yoga G4",
-    "Acer Vx2670G Desktop"
-]
+all_weeks_data = []
 
-for device in devices:
-    st.markdown(f"### 💻 {device}")
-
-    weekly_data = []
-
-    for sheet in sheet_list:
-        try:
-            df_week = load_sheet(sheet)
-            temp_df = device_status_count(df_week)
-
-            row = temp_df[temp_df["Device"] == device]
-
-            if not row.empty:
-                row = row.iloc[0].to_dict()
-                row["Week"] = sheet
-                weekly_data.append(row)
-
-        except:
-            continue
-
-    if not weekly_data:
-        st.warning("No data available")
+for sheet in sheet_list:
+    try:
+        df_week = load_sheet(sheet)
+        temp_df = device_status_count(df_week)
+        temp_df["Week"] = sheet
+        all_weeks_data.append(temp_df)
+    except:
         continue
 
-    weekly_df = pd.DataFrame(weekly_data)
+combined_df = pd.concat(all_weeks_data, ignore_index=True)
 
-    weekly_df = weekly_df[[
-        "Week",
-        "INSTALLED",
-        "SCCM EPP > 4 WKS",
-        "NOT CONNECTED",
-        "REQUIRED",
-        "UNKNOWN",
-        "TOTAL",
-        "% INSTALLED"
-    ]]
+combined_df = combined_df[[
+    "Week",
+    "Device",
+    "INSTALLED",
+    "SCCM EPP > 4 WKS",
+    "NOT CONNECTED",
+    "REQUIRED",
+    "UNKNOWN",
+    "TOTAL",
+    "% INSTALLED"
+]]
 
-    weekly_df.columns = [
-        "Week",
-        "Installed",
-        "SCCM > 4 wks",
-        "Not Connected",
-        "Required",
-        "Unknown",
-        "Total",
-        "% Installed"
-    ]
+combined_df.columns = [
+    "Week",
+    "Device",
+    "Installed",
+    "SCCM > 4 wks",
+    "Not Connected",
+    "Required",
+    "Unknown",
+    "Total",
+    "% Installed"
+]
 
-    weekly_df["% Installed"] = weekly_df["% Installed"].map(lambda x: f"{x:.2f}")
-
-    weekly_df = weekly_df.sort_values("Week", ascending=False)
-
-    st.dataframe(weekly_df, use_container_width=True)
+combined_df["% Installed"] = combined_df["% Installed"].map(lambda x: f"{x:.2f}")
 
 # ==================================================
-# RAW DATA
+# 🔍 FILTERS
 # ==================================================
-st.subheader("📄 Raw Data")
-st.dataframe(df, use_container_width=True)
+st.markdown("### 🔍 Filters")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    selected_week = st.selectbox(
+        "Select Week",
+        ["All"] + sorted(combined_df["Week"].unique(), reverse=True)
+    )
+
+with col2:
+    selected_device = st.selectbox(
+        "Select Device",
+        ["All"] + sorted(combined_df["Device"].unique())
+    )
+
+# Apply filters
+filtered_df = combined_df.copy()
+
+if selected_week != "All":
+    filtered_df = filtered_df[filtered_df["Week"] == selected_week]
+
+if selected_device != "All":
+    filtered_df = filtered_df[filtered_df["Device"] == selected_device]
+
+# ==================================================
+# DISPLAY FILTERED TABLE
+# ==================================================
+st.dataframe(filtered_df, use_container_width=True)
 
 # ==================================================
 # FOOTER

@@ -56,7 +56,7 @@ def load_data(gid, sheet_name, header_row):
                 df["BrandModel"].astype(str).str.strip().str.upper()
             )
 
-        # Dates
+        # Dates (keep as datetime for logic)
         date_cols = ["StartDate", "EndDate", "Last Updated"]
         for col in date_cols:
             if col in df.columns:
@@ -178,7 +178,7 @@ st.download_button(
 )
 
 # ==================================================
-# TABLE RENDER
+# TABLE RENDER (UPDATED HERE)
 # ==================================================
 def render_table(df):
     html_table = """
@@ -218,13 +218,24 @@ def render_table(df):
         for col, val in row.items():
             cell_class = ""
 
+            # Expiry highlight
             if col == "EndDate" and pd.notna(val):
                 if val < today:
                     cell_class = "expired"
                 elif val <= today + pd.Timedelta(days=30):
                     cell_class = "warning"
 
-            safe_val = "" if pd.isna(val) else html.escape(str(val))
+            # ✅ FORMAT DATE HERE (NO TIME)
+            if pd.isna(val):
+                safe_val = ""
+            elif col in ["StartDate", "EndDate", "Last Updated"]:
+                if isinstance(val, pd.Timestamp):
+                    safe_val = val.strftime("%d %m %Y")
+                else:
+                    safe_val = str(val)
+            else:
+                safe_val = html.escape(str(val))
+
             html_table += f"<td class='{cell_class}'>{safe_val}</td>"
 
         html_table += "</tr>"

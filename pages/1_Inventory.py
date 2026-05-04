@@ -1,12 +1,16 @@
 import streamlit as st
 import pandas as pd
 import html
+from streamlit_autorefresh import st_autorefresh
 
 # ==================================================
 # PAGE CONFIG
 # ==================================================
 st.set_page_config(page_title="FVPS Inventory", layout="wide")
 st.title("📦 Inventory System")
+
+# 🔄 AUTO REFRESH EVERY 30 SECONDS
+st_autorefresh(interval=30 * 1000, key="datarefresh")
 
 # ==================================================
 # CONSTANTS
@@ -26,9 +30,9 @@ MASTER_COLUMNS = [
 BASE_URL = "https://docs.google.com/spreadsheets/d/1lmCotLUgTLJBKska2y7od2LTPT_qooIFS0_zyVnRI0A/export?format=csv&gid="
 
 # ==================================================
-# LOAD DATA (CACHED)
+# LOAD DATA (CACHED - 30s)
 # ==================================================
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=30)
 def load_data(gid, sheet_name, header_row):
     try:
         df = pd.read_csv(BASE_URL + gid, header=header_row)
@@ -56,7 +60,7 @@ def load_data(gid, sheet_name, header_row):
                 df["BrandModel"].astype(str).str.strip().str.upper()
             )
 
-        # Dates (keep as datetime for logic)
+        # Dates (keep datetime for logic)
         date_cols = ["StartDate", "EndDate", "Last Updated"]
         for col in date_cols:
             if col in df.columns:
@@ -178,7 +182,7 @@ st.download_button(
 )
 
 # ==================================================
-# TABLE RENDER (UPDATED HERE)
+# TABLE RENDER (DATE FIX APPLIED)
 # ==================================================
 def render_table(df):
     html_table = """
@@ -225,7 +229,7 @@ def render_table(df):
                 elif val <= today + pd.Timedelta(days=30):
                     cell_class = "warning"
 
-            # ✅ FORMAT DATE HERE (NO TIME)
+            # Format dates (NO TIME)
             if pd.isna(val):
                 safe_val = ""
             elif col in ["StartDate", "EndDate", "Last Updated"]:

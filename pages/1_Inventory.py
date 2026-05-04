@@ -9,7 +9,7 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(page_title="FVPS Inventory", layout="wide")
 st.title("📦 Inventory System")
 
-# 🔄 AUTO REFRESH EVERY 30 SECONDS
+# 🔄 AUTO REFRESH
 st_autorefresh(interval=30 * 1000, key="datarefresh")
 
 # ==================================================
@@ -30,18 +30,16 @@ MASTER_COLUMNS = [
 BASE_URL = "https://docs.google.com/spreadsheets/d/1lmCotLUgTLJBKska2y7od2LTPT_qooIFS0_zyVnRI0A/export?format=csv&gid="
 
 # ==================================================
-# LOAD DATA (CACHED - 30s)
+# LOAD DATA
 # ==================================================
 @st.cache_data(ttl=30)
 def load_data(gid, sheet_name, header_row):
     try:
         df = pd.read_csv(BASE_URL + gid, header=header_row)
 
-        # Clean columns
         df.columns = df.columns.astype(str).str.strip()
         df = df.loc[:, ~df.columns.str.contains("^Unnamed", na=False)]
 
-        # Fix Location
         if "Location" in df.columns:
             df["Location"] = df["Location"].apply(
                 lambda x: str(int(float(x))).zfill(2)
@@ -49,27 +47,19 @@ def load_data(gid, sheet_name, header_row):
                 else x
             )
 
-        # Clean text fields
         if "EquipmentType" in df.columns:
-            df["EquipmentType"] = (
-                df["EquipmentType"].astype(str).str.strip().str.title()
-            )
+            df["EquipmentType"] = df["EquipmentType"].astype(str).str.strip().str.title()
 
         if "BrandModel" in df.columns:
-            df["BrandModel"] = (
-                df["BrandModel"].astype(str).str.strip().str.upper()
-            )
+            df["BrandModel"] = df["BrandModel"].astype(str).str.strip().str.upper()
 
-        # Dates (keep datetime for logic)
-        date_cols = ["StartDate", "EndDate", "Last Updated"]
-        for col in date_cols:
+        # Keep datetime for logic
+        for col in ["StartDate", "EndDate", "Last Updated"]:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors="coerce")
 
-        # Category
         df["Category"] = "SSOE" if sheet_name == "SSOE" else "NON-SSOE"
 
-        # Align columns
         for col in MASTER_COLUMNS:
             if col not in df.columns:
                 df[col] = None
@@ -81,7 +71,7 @@ def load_data(gid, sheet_name, header_row):
         return pd.DataFrame(columns=MASTER_COLUMNS)
 
 # ==================================================
-# LOAD ALL DATA
+# LOAD ALL
 # ==================================================
 def load_all():
     datasets = [
@@ -97,7 +87,6 @@ def load_all():
     frames = [load_data(gid, name, header) for gid, name, header in datasets]
     df = pd.concat(frames, ignore_index=True)
 
-    # Remove junk rows safely
     if "BrandModel" in df.columns and "EquipmentType" in df.columns:
         df = df[df["BrandModel"].notna() & df["EquipmentType"].notna()]
 
@@ -122,9 +111,6 @@ with col2:
 with col3:
     search = st.text_input("🔎 Search")
 
-# ==================================================
-# APPLY FILTERS
-# ==================================================
 filtered_df = df.copy()
 
 if category != "All":
@@ -152,11 +138,10 @@ def get_expiry_status(date):
         return "Expiring Soon"
     return "Active"
 
-if "EndDate" in filtered_df.columns:
-    filtered_df["Expiry Status"] = filtered_df["EndDate"].apply(get_expiry_status)
+filtered_df["Expiry Status"] = filtered_df["EndDate"].apply(get_expiry_status)
 
 # ==================================================
-# SUMMARY
+# OVERVIEW
 # ==================================================
 st.subheader("📊 Overview")
 
@@ -166,10 +151,78 @@ c2.metric("SSOE", len(filtered_df[filtered_df["Category"] == "SSOE"]))
 c3.metric("NON-SSOE", len(filtered_df[filtered_df["Category"] == "NON-SSOE"]))
 
 # ==================================================
-# CHART
+# EXPIRY SUMMARY
+# ==================================================
+st.subheader("⏳ Expiry Summary")
+
+expiry_counts = filtered_df["Expiry Status"].value_counts()
+
+expired = expiry_counts.get("Expired", 0)
+expiring = expiry_counts.get("Expiring Soon", 0)
+active = expiry_counts.get("Active", 0)
+
+c1, c2, c3 = st.columns(3)
+c1.metric("🔴 Expired", expired)
+c2.metric("🟡 Expiring Soon", expiring)
+c3.metric("🟢 Active", active)
+
+# ==================================================
+# EQUIPMENT DISTRIBUTION TABLE
 # ==================================================
 st.subheader("📊 Equipment Distribution")
-st.bar_chart(filtered_df["EquipmentType"].value_counts())
+
+equipment_counts = (
+    filtered_df["EquipmentType"]
+    .value_counts()
+    .reset_index()
+)
+
+equipment_counts.columns = ["Equipment Type", "Count"]
+
+# ==================================================
+# TABLE STYLE FUNCTION
+# ==================================================
+def render_summary_table(df):
+    html_table = """
+    <style>
+    .summary-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 15px;
+    }
+    .summary-table th {
+        background-color: #1f4e79;
+        color: white;
+        padding: 10px;
+        border: 2px solid black;
+        text-align: center;
+    }
+    .summary-table td {
+        padding: 8px;
+        border: 2px solid black;
+        text-align: center;
+    }
+    </style>
+    <table class="summary-table">
+    <thead><tr>
+    """
+
+    for col in df.columns:
+        html_table += f"<th>{col}</th>"
+
+    html_table += "</tr></thead><tbody>"
+
+    for _, row in df.iterrows():
+        html_table += "<tr>"
+        for val in row:
+            html_table += f"<td>{val}</td>"
+        html_table += "</tr>"
+
+    html_table += "</tbody></table>"
+
+    return html_table
+
+st.markdown(render_summary_table(equipment_counts), unsafe_allow_html=True)
 
 # ==================================================
 # DOWNLOAD
@@ -182,7 +235,7 @@ st.download_button(
 )
 
 # ==================================================
-# TABLE RENDER (DATE FIX APPLIED)
+# MAIN TABLE (DATE FIX)
 # ==================================================
 def render_table(df):
     html_table = """
@@ -222,14 +275,12 @@ def render_table(df):
         for col, val in row.items():
             cell_class = ""
 
-            # Expiry highlight
             if col == "EndDate" and pd.notna(val):
                 if val < today:
                     cell_class = "expired"
                 elif val <= today + pd.Timedelta(days=30):
                     cell_class = "warning"
 
-            # Format dates (NO TIME)
             if pd.isna(val):
                 safe_val = ""
             elif col in ["StartDate", "EndDate", "Last Updated"]:
@@ -259,8 +310,5 @@ with tab1:
 with tab2:
     st.subheader("⏳ Expiry Tracking")
 
-    expiry_df = filtered_df[
-        filtered_df["EndDate"].notna()
-    ].sort_values(by="EndDate")
-
+    expiry_df = filtered_df[filtered_df["EndDate"].notna()].sort_values(by="EndDate")
     st.markdown(render_table(expiry_df), unsafe_allow_html=True)

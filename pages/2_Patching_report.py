@@ -5,7 +5,7 @@ import urllib.parse
 import altair as alt
 
 # ==================================================
-# CONFIG
+# PAGE CONFIG
 # ==================================================
 st.set_page_config(
     page_title="Patching Report Dashboard",
@@ -15,7 +15,7 @@ st.set_page_config(
 SPREADSHEET_ID = "1zvwKzIEbvQEEgbcqcyp9WP0IfguSaHm2G67ZAeuiSOE"
 
 st.title("🛠️ Patching Report Dashboard")
-st.caption("Live device health monitoring with weekly historical breakdown")
+st.caption("Live device health monitoring with historical weekly tracking")
 
 # ==================================================
 # AUTO REFRESH
@@ -30,11 +30,15 @@ if time.time() - st.session_state.last_refresh > REFRESH_INTERVAL:
     st.rerun()
 
 # ==================================================
-# LOAD META
+# GET LATEST SHEET
 # ==================================================
 @st.cache_data(ttl=30)
 def get_latest_sheet():
-    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=META"
+
+    url = (
+        f"https://docs.google.com/spreadsheets/d/"
+        f"{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=META"
+    )
 
     df = pd.read_csv(url, header=None)
 
@@ -45,16 +49,20 @@ def get_latest_sheet():
 # ==================================================
 @st.cache_data(ttl=60)
 def get_all_sheets():
-    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=META"
+
+    url = (
+        f"https://docs.google.com/spreadsheets/d/"
+        f"{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=META"
+    )
 
     df = pd.read_csv(url, header=None)
 
     sheets = df.iloc[1:, 0].dropna().tolist()
 
-    return [str(x).strip() for x in sheets]
+    return [str(s).strip() for s in sheets]
 
 # ==================================================
-# LOAD GOOGLE SHEET
+# LOAD SHEET
 # ==================================================
 @st.cache_data(ttl=30)
 def load_sheet(sheet_name):
@@ -77,7 +85,7 @@ def load_sheet(sheet_name):
     return df
 
 # ==================================================
-# DEVICE STATUS COUNT
+# DEVICE CALCULATION
 # ==================================================
 def device_status_count(df):
 
@@ -95,7 +103,7 @@ def device_status_count(df):
         "UNKNOWN"
     ]
 
-    result = []
+    results = []
 
     for device in devices:
 
@@ -121,9 +129,9 @@ def device_status_count(df):
         row["TOTAL"] = total
         row["% INSTALLED"] = round(percent, 2)
 
-        result.append(row)
+        results.append(row)
 
-    return pd.DataFrame(result)
+    return pd.DataFrame(results)
 
 # ==================================================
 # LOAD CURRENT WEEK
@@ -139,9 +147,9 @@ st.success(f"📅 Current Week: {latest_sheet}")
 # ==================================================
 st.subheader("💻 Current Week Device Breakdown")
 
-current_device_df = device_status_count(latest_df)
+current_df = device_status_count(latest_df)
 
-current_device_df.columns = [
+current_df.columns = [
     "Device",
     "Installed",
     "SCCM > 4 wks",
@@ -152,15 +160,15 @@ current_device_df.columns = [
     "% Installed"
 ]
 
-display_current = current_device_df.copy()
+display_current_df = current_df.copy()
 
-display_current["% Installed"] = (
-    display_current["% Installed"]
+display_current_df["% Installed"] = (
+    display_current_df["% Installed"]
     .map(lambda x: f"{x:.2f}")
 )
 
 st.dataframe(
-    display_current,
+    display_current_df,
     use_container_width=True,
     hide_index=True
 )
@@ -170,7 +178,7 @@ st.dataframe(
 # ==================================================
 st.subheader("📊 Current Week Status Distribution")
 
-chart_df = current_device_df.set_index("Device")[[
+chart_df = current_df.set_index("Device")[[
     "Installed",
     "SCCM > 4 wks",
     "Not Connected",
@@ -204,26 +212,25 @@ chart = (
 st.altair_chart(chart, use_container_width=True)
 
 # ==================================================
-# LOAD ALL WEEK DATABASE
+# LOAD ALL HISTORICAL DATA
 # ==================================================
-st.subheader("🗂️ Historical Weekly Database")
-
 sheet_list = get_all_sheets()
 
-database_list = []
+all_data = []
 
 progress = st.progress(0)
 
 for index, sheet in enumerate(sheet_list):
 
     try:
-        week_df = load_sheet(sheet)
 
-        temp = device_status_count(week_df)
+        temp_sheet_df = load_sheet(sheet)
 
-        temp["Week"] = sheet
+        temp_result_df = device_status_count(temp_sheet_df)
 
-        database_list.append(temp)
+        temp_result_df["Week"] = sheet
+
+        all_data.append(temp_result_df)
 
     except:
         pass
@@ -233,9 +240,9 @@ for index, sheet in enumerate(sheet_list):
 progress.empty()
 
 # ==================================================
-# COMBINE DATABASE
+# COMBINE HISTORICAL DATA
 # ==================================================
-combined_df = pd.concat(database_list, ignore_index=True)
+combined_df = pd.concat(all_data, ignore_index=True)
 
 combined_df = combined_df[[
     "Week",
@@ -262,7 +269,7 @@ combined_df.columns = [
 ]
 
 # ==================================================
-# SORT WEEKS PROPERLY
+# CONVERT DATE
 # ==================================================
 def convert_week(x):
 
@@ -281,9 +288,9 @@ combined_df = combined_df.sort_values(
 # ==================================================
 # FILTERS
 # ==================================================
-st.markdown("### 🔍 Database Filters")
+st.markdown("### 🔍 Filters")
 
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 
 with col1:
 
@@ -299,50 +306,25 @@ with col2:
         ["All"] + sorted(combined_df["Device"].unique())
     )
 
-with col3:
-
-    selected_status = st.selectbox(
-        "View",
-        [
-            "All",
-            "Installed Only",
-            "Non Installed"
-        ]
-    )
-
 # ==================================================
 # APPLY FILTERS
 # ==================================================
 filtered_df = combined_df.copy()
 
 if selected_week != "All":
+
     filtered_df = filtered_df[
         filtered_df["Week"] == selected_week
     ]
 
 if selected_device != "All":
+
     filtered_df = filtered_df[
         filtered_df["Device"] == selected_device
     ]
 
-if selected_status == "Installed Only":
-    filtered_df = filtered_df[
-        filtered_df["Installed"] > 0
-    ]
-
-if selected_status == "Non Installed":
-    filtered_df = filtered_df[
-        (
-            filtered_df["SCCM > 4 wks"] +
-            filtered_df["Not Connected"] +
-            filtered_df["Required"] +
-            filtered_df["Unknown"]
-        ) > 0
-    ]
-
-
 # ==================================================
-# DISPLAY DATABASE
+# FORMAT DISPLAY
 # ==================================================
 display_df = filtered_df.copy()
 
@@ -353,40 +335,98 @@ display_df["% Installed"] = (
 
 display_df = display_df.drop(columns=["Week_Date"])
 
-st.dataframe(
-    display_df,
-    use_container_width=True,
-    hide_index=True
-)
+# ==================================================
+# DATABASE TABS
+# ==================================================
+tab1, tab2 = st.tabs([
+    "📅 Historical Weekly Database",
+    "🗄️ Raw Database"
+])
 
 # ==================================================
-# RAW DATABASE
+# TAB 1 - HISTORICAL DATABASE
 # ==================================================
-with st.expander("🗄️ View Raw Database"):
+with tab1:
+
+    st.subheader("📅 Historical Weekly Breakdown")
+
+    st.dataframe(
+        display_df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # ==============================================
+    # HISTORICAL TREND CHART
+    # ==============================================
+    st.subheader("📈 Historical Installation Trend")
+
+    trend_df = combined_df.copy()
+
+    if selected_device != "All":
+
+        trend_df = trend_df[
+            trend_df["Device"] == selected_device
+        ]
+
+    line_chart = (
+        alt.Chart(trend_df)
+        .mark_line(point=True)
+        .encode(
+            x=alt.X("Week_Date:T", title="Week"),
+            y=alt.Y("% Installed:Q", title="% Installed"),
+            color="Device:N",
+            tooltip=[
+                "Week",
+                "Device",
+                "% Installed"
+            ]
+        )
+        .properties(height=400)
+    )
+
+    st.altair_chart(
+        line_chart,
+        use_container_width=True
+    )
+
+# ==================================================
+# TAB 2 - RAW DATABASE
+# ==================================================
+with tab2:
+
+    st.subheader("🗄️ Raw Weekly Database")
 
     raw_database = []
 
-    for sheet in sheet_list:
+    progress2 = st.progress(0)
+
+    for index, sheet in enumerate(sheet_list):
 
         try:
-            temp_df = load_sheet(sheet)
 
-            temp_df["WEEK"] = sheet
+            temp_raw_df = load_sheet(sheet)
 
-            raw_database.append(temp_df)
+            temp_raw_df["WEEK"] = sheet
+
+            raw_database.append(temp_raw_df)
 
         except:
             pass
+
+        progress2.progress((index + 1) / len(sheet_list))
+
+    progress2.empty()
 
     raw_df = pd.concat(raw_database, ignore_index=True)
 
     st.dataframe(
         raw_df,
         use_container_width=True,
-        height=500
+        height=600
     )
 
 # ==================================================
 # FOOTER
 # ==================================================
-st.caption("🔄 Dashboard auto refreshes every 30 seconds")
+st.caption("🔄 Auto refresh every 30 seconds")

@@ -340,37 +340,6 @@ if selected_status == "Non Installed":
         ) > 0
     ]
 
-# ==================================================
-# SUMMARY METRICS
-# ==================================================
-st.markdown("### 📈 Database Summary")
-
-metric1, metric2, metric3, metric4 = st.columns(4)
-
-metric1.metric(
-    "Weeks",
-    filtered_df["Week"].nunique()
-)
-
-metric2.metric(
-    "Installed",
-    int(filtered_df["Installed"].sum())
-)
-
-metric3.metric(
-    "Total Devices",
-    int(filtered_df["Total"].sum())
-)
-
-overall_percent = (
-    filtered_df["Installed"].sum() /
-    filtered_df["Total"].sum() * 100
-) if filtered_df["Total"].sum() > 0 else 0
-
-metric4.metric(
-    "% Installed",
-    f"{overall_percent:.2f}%"
-)
 
 # ==================================================
 # DISPLAY DATABASE

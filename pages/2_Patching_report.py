@@ -85,7 +85,7 @@ def load_sheet(sheet_name):
     return df
 
 # ==================================================
-# DEVICE CALCULATION
+# DEVICE STATUS COUNT
 # ==================================================
 def device_status_count(df):
 
@@ -100,7 +100,8 @@ def device_status_count(df):
         "SCCM EPP > 4 WKS",
         "NOT CONNECTED",
         "REQUIRED",
-        "UNKNOWN"
+        "UNKNOWN",
+        "FAULTY"
     ]
 
     results = []
@@ -156,6 +157,7 @@ current_df.columns = [
     "Not Connected",
     "Required",
     "Unknown",
+    "Faulty",
     "Total",
     "% Installed"
 ]
@@ -183,7 +185,8 @@ chart_df = current_df.set_index("Device")[[
     "SCCM > 4 wks",
     "Not Connected",
     "Required",
-    "Unknown"
+    "Unknown",
+    "Faulty"
 ]].astype(int)
 
 long_df = (
@@ -252,6 +255,7 @@ combined_df = combined_df[[
     "NOT CONNECTED",
     "REQUIRED",
     "UNKNOWN",
+    "FAULTY",
     "TOTAL",
     "% INSTALLED"
 ]]
@@ -264,6 +268,7 @@ combined_df.columns = [
     "Not Connected",
     "Required",
     "Unknown",
+    "Faulty",
     "Total",
     "% Installed"
 ]
@@ -354,6 +359,40 @@ with tab1:
         display_df,
         use_container_width=True,
         hide_index=True
+    )
+
+    # ==============================================
+    # HISTORICAL TREND CHART
+    # ==============================================
+    st.subheader("📈 Historical Installation Trend")
+
+    trend_df = combined_df.copy()
+
+    if selected_device != "All":
+
+        trend_df = trend_df[
+            trend_df["Device"] == selected_device
+        ]
+
+    line_chart = (
+        alt.Chart(trend_df)
+        .mark_line(point=True)
+        .encode(
+            x=alt.X("Week_Date:T", title="Week"),
+            y=alt.Y("% Installed:Q", title="% Installed"),
+            color="Device:N",
+            tooltip=[
+                "Week",
+                "Device",
+                "% Installed"
+            ]
+        )
+        .properties(height=400)
+    )
+
+    st.altair_chart(
+        line_chart,
+        use_container_width=True
     )
 
 # ==================================================

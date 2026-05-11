@@ -4,3 +4,4 @@ plotly
 requests
 st-gsheets-connection
 streamlit-autorefresh
+openpyxl

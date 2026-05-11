@@ -65,7 +65,7 @@ def load_all_sheets():
                 dtype=str
             )
 
-            # Clean headers
+            # Clean column headers
             temp_df.columns = (
                 temp_df.columns
                 .astype(str)
@@ -73,7 +73,7 @@ def load_all_sheets():
                 .str.upper()
             )
 
-            # Add week column
+            # Add week from sheet name
             temp_df["WEEK"] = sheet_name
 
             all_data.append(temp_df)
@@ -310,9 +310,9 @@ with tab1:
 # =====================================
 with tab2:
 
-    st.subheader("📅 Weekly Summary")
+    st.subheader("📅 All Weeks Summary")
 
-    weekly_rows = []
+    weekly_summary_list = []
 
     for week in sorted_weeks:
 
@@ -321,62 +321,70 @@ with tab2:
         ]
 
         # MODEL COUNTS
-        acer_total = len(
+        acer_count = len(
             week_df[
                 week_df["MODEL"] == "ACER VX2670G DESKTOP"
             ]
         )
 
-        k14_total = len(
+        k14_count = len(
             week_df[
                 week_df["MODEL"] == "LENOVO K14 GEN2"
             ]
         )
 
-        yoga_total = len(
+        yoga_count = len(
             week_df[
                 week_df["MODEL"] == "LENOVO L13 YOGA G4"
             ]
         )
 
         # STATUS COUNTS
-        completed = len(
+        completed_count = len(
             week_df[
                 week_df["IPU STATUS"] == "Completed"
             ]
         )
 
-        not_completed = len(
+        not_completed_count = len(
             week_df[
                 week_df["IPU STATUS"] == "Not Completed"
             ]
         )
 
-        total = completed + not_completed
+        total_count = (
+            completed_count +
+            not_completed_count
+        )
 
-        completion_rate = 0
+        completion_percentage = 0
 
-        if total > 0:
-            completion_rate = round(
-                completed / total * 100,
+        if total_count > 0:
+            completion_percentage = round(
+                (completed_count / total_count) * 100,
                 2
             )
 
-        weekly_rows.append({
+        # APPEND ROW
+        weekly_summary_list.append({
             "WEEK": week,
-            "ACER VX2670G DESKTOP": acer_total,
-            "LENOVO K14 GEN2": k14_total,
-            "LENOVO L13 YOGA G4": yoga_total,
-            "Completed": completed,
-            "Not Completed": not_completed,
-            "Total": total,
-            "Completion %": completion_rate
+            "ACER VX2670G DESKTOP": acer_count,
+            "LENOVO K14 GEN2": k14_count,
+            "LENOVO L13 YOGA G4": yoga_count,
+            "Completed": completed_count,
+            "Not Completed": not_completed_count,
+            "Total": total_count,
+            "Completion %": completion_percentage
         })
 
-    weekly_summary = pd.DataFrame(weekly_rows)
+    # CREATE DATAFRAME
+    weekly_summary_df = pd.DataFrame(
+        weekly_summary_list
+    )
 
+    # DISPLAY TABLE
     st.dataframe(
-        weekly_summary,
+        weekly_summary_df,
         use_container_width=True,
         hide_index=True
     )
@@ -384,13 +392,16 @@ with tab2:
     # TREND CHART
     st.subheader("📈 Weekly Completion Trend")
 
-    chart = alt.Chart(
-        weekly_summary
+    trend_chart = alt.Chart(
+        weekly_summary_df
     ).mark_line(point=True).encode(
         x=alt.X("WEEK:N", sort=None),
         y=alt.Y("Completion %:Q"),
         tooltip=[
             "WEEK",
+            "ACER VX2670G DESKTOP",
+            "LENOVO K14 GEN2",
+            "LENOVO L13 YOGA G4",
             "Completed",
             "Not Completed",
             "Completion %"
@@ -398,7 +409,7 @@ with tab2:
     )
 
     st.altair_chart(
-        chart,
+        trend_chart,
         use_container_width=True
     )
 

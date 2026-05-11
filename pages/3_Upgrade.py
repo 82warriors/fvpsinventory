@@ -64,7 +64,6 @@ def load_all_sheets():
                 dtype=str
             )
 
-            # Clean column headers
             temp_df.columns = (
                 temp_df.columns
                 .astype(str)
@@ -72,7 +71,6 @@ def load_all_sheets():
                 .str.upper()
             )
 
-            # Add week column from sheet name
             temp_df["WEEK"] = sheet_name
 
             all_data.append(temp_df)
@@ -248,8 +246,10 @@ with tab1:
     c2.metric("❌ Not Completed", not_completed)
     c3.metric("📈 Completion Rate", f"{rate:.2f}%")
 
+    # =====================================
     # TABLE
-    st.markdown("### 📋 Summary Table")
+    # =====================================
+    st.markdown("## 📋 Upgrade Summary")
 
     st.dataframe(
         summary[
@@ -265,8 +265,10 @@ with tab1:
         hide_index=True
     )
 
+    # =====================================
     # CHART
-    st.markdown("### 📈 Upgrade Progress")
+    # =====================================
+    st.markdown("## 📈 Upgrade Progress")
 
     chart_df = summary.melt(
         id_vars=["MODEL", "Total"],
@@ -289,14 +291,14 @@ with tab1:
     )
 
     base = alt.Chart(chart_df).encode(
-        x=alt.X("MODEL:N"),
-        y=alt.Y("Count:Q"),
-        xOffset="Status:N"
+        x=alt.X("MODEL"),
+        y=alt.Y("Count"),
+        xOffset="Status"
     )
 
     bars = (
         base.mark_bar()
-        .encode(color="Status:N")
+        .encode(color="Status")
     )
 
     text = (
@@ -305,8 +307,68 @@ with tab1:
     )
 
     st.altair_chart(
-        (bars + text).properties(height=350),
+        (bars + text).properties(height=400),
         use_container_width=True
+    )
+
+    # =====================================
+    # FUNCTION: ADMIN NOT COMPLETED
+    # =====================================
+    def show_admin_not_completed(
+        model_name,
+        display_name
+    ):
+
+        st.markdown(
+            f"## 🚨 Admin Devices Not Completed ({display_name})"
+        )
+
+        filtered = df[
+            (df["MODEL"] == model_name) &
+            (df["CATEGORY"] == "ADMIN") &
+            (df["IPU STATUS"] == "Not Completed")
+        ]
+
+        if filtered.empty:
+            st.success(
+                f"✅ No pending admin devices for {display_name}"
+            )
+            return
+
+        st.metric(
+            "Total Pending Devices",
+            len(filtered)
+        )
+
+        st.markdown("### 📋 Detailed List")
+
+        st.dataframe(
+            filtered[
+                [
+                    "CUSTODIAN",
+                    "HOSTNAME",
+                    "SERIAL NUMBER",
+                    "ASSET TAG",
+                    "LOCATION",
+                    "CATEGORY",
+                    "IPU STATUS"
+                ]
+            ],
+            use_container_width=True,
+            hide_index=True
+        )
+
+    # =====================================
+    # RUN FOR BOTH MODELS
+    # =====================================
+    show_admin_not_completed(
+        "LENOVO L13 YOGA G4",
+        "Lenovo L13 Yoga G4"
+    )
+
+    show_admin_not_completed(
+        "LENOVO K14 GEN2",
+        "Lenovo K14 Gen2"
     )
 
 # =====================================
@@ -330,30 +392,26 @@ with tab2:
             )
             .size()
             .unstack(fill_value=0)
+            .reset_index()
         )
 
-        # Ensure columns exist
         if "Completed" not in summary.columns:
             summary["Completed"] = 0
 
         if "Not Completed" not in summary.columns:
             summary["Not Completed"] = 0
 
-        summary = summary.reset_index()
-
-        # Total
         summary["Total"] = (
             summary["Completed"] +
             summary["Not Completed"]
         )
 
-        # Completion %
         summary["Completion %"] = (
             summary["Completed"] /
             summary["Total"] * 100
         ).round(2)
 
-        # Display Table
+        # TABLE
         st.dataframe(
             summary[
                 [
@@ -368,7 +426,7 @@ with tab2:
             hide_index=True
         )
 
-        # Chart
+        # CHART
         chart_df = summary.melt(
             id_vars=["MODEL", "Total"],
             value_vars=[
@@ -390,14 +448,14 @@ with tab2:
         )
 
         base = alt.Chart(chart_df).encode(
-            x=alt.X("MODEL:N"),
-            y=alt.Y("Count:Q"),
-            xOffset="Status:N"
+            x=alt.X("MODEL"),
+            y=alt.Y("Count"),
+            xOffset="Status"
         )
 
         bars = (
             base.mark_bar()
-            .encode(color="Status:N")
+            .encode(color="Status")
         )
 
         text = (
@@ -456,86 +514,6 @@ with tab3:
                 use_container_width=True,
                 hide_index=True
             )
-
-==============================
-
-TABLE
-
-==============================
-
-st.markdown("## 📋 Upgrade Summary")st.dataframe(summary[["MODEL","Completed","Not Completed","Total","Completion %"]],use_container_width=True,hide_index=True)
-
-==============================
-
-CHART
-
-==============================
-
-st.markdown("## 📈 Upgrade Progress")
-
-chart_df = summary.melt(id_vars=["MODEL","Total"],value_vars=["Completed","Not Completed"],var_name="Status",value_name="Count")
-
-chart_df["Percent"] = (chart_df["Count"] / chart_df["Total"] * 100).round(1)chart_df["Label"] = chart_df["Percent"].astype(str) + "%"
-
-base = alt.Chart(chart_df).encode(x=alt.X("MODEL"),y=alt.Y("Count"),xOffset="Status")
-
-bars = base.mark_bar().encode(color="Status")text = base.mark_text(dy=-5).encode(text="Label")
-
-st.altair_chart((bars + text).properties(height=400), use_container_width=True)
-
-==============================
-
-🚨 FUNCTION: ADMIN NOT COMPLETED
-
-==============================
-
-def show_admin_not_completed(model_name, display_name):st.markdown(f"## 🚨 Admin Devices Not Completed ({display_name})")
-
-filtered = df[
-    (df["MODEL"] == model_name) &
-    (df["CATEGORY"] == "ADMIN") &
-    (df["IPU STATUS"] == "Not Completed")
-]
-
-if filtered.empty:
-    st.success(f"✅ No pending admin devices for {display_name}")
-    return
-
-st.metric("Total Pending Devices", len(filtered))
-
-custodian_summary = (
-    filtered.groupby("CUSTODIAN")
-    .size()
-    .reset_index(name="Device Count")
-    .sort_values(by="Device Count", ascending=False)
-)
-
-st.markdown("### 📋 Detailed List")
-st.dataframe(
-    filtered[
-        ["CUSTODIAN", "HOSTNAME", "SERIAL NUMBER", "ASSET TAG", "LOCATION", "CATEGORY", "IPU STATUS"]
-    ],
-    use_container_width=True,
-    hide_index=True
-)
-
-==============================
-
-🚨 RUN FOR BOTH MODELS
-
-==============================
-
-show_admin_not_completed("LENOVO L13 YOGA G4", "Lenovo L13 Yoga G4")show_admin_not_completed("LENOVO K14 GEN2", "Lenovo K14 Gen2")
-
-==============================
-
-RAW DATA
-
-==============================
-
-st.markdown("## 🗂️ Full Updated Data")st.dataframe(df, use_container_width=True)
-
-
 
 # =====================================
 # TAB 4 - RAW DATA

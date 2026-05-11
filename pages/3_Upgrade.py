@@ -1,4 +1,3 @@
-```python
 import streamlit as st
 import pandas as pd
 import altair as alt
@@ -65,7 +64,6 @@ def load_all_sheets():
                 dtype=str
             )
 
-            # Clean column headers
             temp_df.columns = (
                 temp_df.columns
                 .astype(str)
@@ -73,7 +71,6 @@ def load_all_sheets():
                 .str.upper()
             )
 
-            # Add week from sheet name
             temp_df["WEEK"] = sheet_name
 
             all_data.append(temp_df)
@@ -91,37 +88,7 @@ def load_all_sheets():
 df, error = load_all_sheets()
 
 if error:
-    st.error("❌ Failed to load data")
-    st.warning(error)
-    st.stop()
-
-st.success("✅ All weekly sheets loaded")
-
-# =====================================
-# REQUIRED HEADERS
-# =====================================
-REQUIRED_HEADERS = [
-    "SCHOOL NAME",
-    "HOSTNAME",
-    "SERIAL NUMBER",
-    "ASSET TAG",
-    "CUSTODIAN",
-    "LOCATION",
-    "BRAND",
-    "MODEL",
-    "CATEGORY",
-    "IPU STATUS",
-    "EOL STATUS"
-]
-
-missing = [
-    h for h in REQUIRED_HEADERS
-    if h not in df.columns
-]
-
-if missing:
-    st.error("❌ Missing required headers")
-    st.write(missing)
+    st.error(error)
     st.stop()
 
 # =====================================
@@ -138,13 +105,6 @@ df["IPU STATUS"] = (
     df["IPU STATUS"]
     .astype(str)
     .str.title()
-    .str.strip()
-)
-
-df["CATEGORY"] = (
-    df["CATEGORY"]
-    .astype(str)
-    .str.upper()
     .str.strip()
 )
 
@@ -171,6 +131,7 @@ def sort_weeks(week_name):
             week_name,
             format="%d %B %Y"
         )
+
     except:
         return pd.Timestamp.min
 
@@ -181,7 +142,7 @@ sorted_weeks = sorted(
 )
 
 # =====================================
-# CREATE TABS
+# TABS
 # =====================================
 tab1, tab2, tab3, tab4 = st.tabs([
     "📊 Current Week",
@@ -191,7 +152,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 ])
 
 # =====================================
-# TAB 1 — CURRENT WEEK
+# TAB 1 - CURRENT WEEK
 # =====================================
 with tab1:
 
@@ -209,6 +170,7 @@ with tab1:
         )
         .size()
         .unstack(fill_value=0)
+        .reset_index()
     )
 
     if "Completed" not in summary.columns:
@@ -217,41 +179,15 @@ with tab1:
     if "Not Completed" not in summary.columns:
         summary["Not Completed"] = 0
 
-    summary = summary.reset_index()
-
     summary["Total"] = (
-        summary["Completed"]
-        + summary["Not Completed"]
+        summary["Completed"] +
+        summary["Not Completed"]
     )
 
     summary["Completion %"] = (
-        summary["Completed"]
-        / summary["Total"]
-        * 100
+        summary["Completed"] /
+        summary["Total"] * 100
     ).round(2)
-
-    # KPIs
-    completed = int(summary["Completed"].sum())
-
-    not_completed = int(
-        summary["Not Completed"].sum()
-    )
-
-    total = completed + not_completed
-
-    rate = 0
-
-    if total > 0:
-        rate = completed / total * 100
-
-    c1, c2, c3 = st.columns(3)
-
-    c1.metric("✅ Completed", completed)
-    c2.metric("❌ Not Completed", not_completed)
-    c3.metric("📈 Completion Rate", f"{rate:.2f}%")
-
-    # TABLE
-    st.markdown("### 📋 Summary Table")
 
     st.dataframe(
         summary,
@@ -259,60 +195,14 @@ with tab1:
         hide_index=True
     )
 
-    # CHART
-    st.markdown("### 📈 Upgrade Progress")
-
-    chart_df = summary.melt(
-        id_vars=["MODEL", "Total"],
-        value_vars=[
-            "Completed",
-            "Not Completed"
-        ],
-        var_name="Status",
-        value_name="Count"
-    )
-
-    chart_df["Percent"] = (
-        chart_df["Count"]
-        / chart_df["Total"]
-        * 100
-    ).round(1)
-
-    chart_df["Label"] = (
-        chart_df["Percent"]
-        .astype(str)
-        + "%"
-    )
-
-    base = alt.Chart(chart_df).encode(
-        x=alt.X("MODEL:N"),
-        y=alt.Y("Count:Q"),
-        xOffset="Status:N"
-    )
-
-    bars = (
-        base.mark_bar()
-        .encode(color="Status:N")
-    )
-
-    text = (
-        base.mark_text(dy=-5)
-        .encode(text="Label")
-    )
-
-    st.altair_chart(
-        (bars + text).properties(height=400),
-        use_container_width=True
-    )
-
 # =====================================
-# TAB 2 — ALL WEEKS SUMMARY
+# TAB 2 - ALL WEEKS SUMMARY
 # =====================================
 with tab2:
 
     st.subheader("📅 All Weeks Summary")
 
-    weekly_summary_list = []
+    weekly_summary = []
 
     for week in sorted_weeks:
 
@@ -320,7 +210,6 @@ with tab2:
             df_filtered["WEEK"] == week
         ]
 
-        # MODEL COUNTS
         acer_count = len(
             week_df[
                 week_df["MODEL"] == "ACER VX2670G DESKTOP"
@@ -339,82 +228,67 @@ with tab2:
             ]
         )
 
-        # STATUS COUNTS
-        completed_count = len(
+        completed = len(
             week_df[
                 week_df["IPU STATUS"] == "Completed"
             ]
         )
 
-        not_completed_count = len(
+        not_completed = len(
             week_df[
                 week_df["IPU STATUS"] == "Not Completed"
             ]
         )
 
-        total_count = (
-            completed_count +
-            not_completed_count
-        )
+        total = completed + not_completed
 
-        completion_percentage = 0
+        completion = 0
 
-        if total_count > 0:
-            completion_percentage = round(
-                (completed_count / total_count) * 100,
+        if total > 0:
+            completion = round(
+                completed / total * 100,
                 2
             )
 
-        # APPEND ROW
-        weekly_summary_list.append({
+        weekly_summary.append({
             "WEEK": week,
             "ACER VX2670G DESKTOP": acer_count,
             "LENOVO K14 GEN2": k14_count,
             "LENOVO L13 YOGA G4": yoga_count,
-            "Completed": completed_count,
-            "Not Completed": not_completed_count,
-            "Total": total_count,
-            "Completion %": completion_percentage
+            "Completed": completed,
+            "Not Completed": not_completed,
+            "Total": total,
+            "Completion %": completion
         })
 
-    # CREATE DATAFRAME
-    weekly_summary_df = pd.DataFrame(
-        weekly_summary_list
+    weekly_df = pd.DataFrame(
+        weekly_summary
     )
 
-    # DISPLAY TABLE
     st.dataframe(
-        weekly_summary_df,
+        weekly_df,
         use_container_width=True,
         hide_index=True
     )
 
-    # TREND CHART
-    st.subheader("📈 Weekly Completion Trend")
-
-    trend_chart = alt.Chart(
-        weekly_summary_df
+    chart = alt.Chart(
+        weekly_df
     ).mark_line(point=True).encode(
         x=alt.X("WEEK:N", sort=None),
-        y=alt.Y("Completion %:Q"),
+        y="Completion %:Q",
         tooltip=[
             "WEEK",
-            "ACER VX2670G DESKTOP",
-            "LENOVO K14 GEN2",
-            "LENOVO L13 YOGA G4",
-            "Completed",
-            "Not Completed",
             "Completion %"
         ]
     )
 
     st.altair_chart(
-        trend_chart,
+        chart,
         use_container_width=True
     )
 
 # =====================================
-# TAB 3 — WEEKLY TABLES
+# TAB 3 - WEEKLY TABLES
 # =====================================
 with tab3:
 
@@ -428,30 +302,6 @@ with tab3:
                 df_filtered["WEEK"] == week
             ]
 
-            st.metric(
-                "Total Devices",
-                len(week_df)
-            )
-
-            summary_week = (
-                week_df.groupby(
-                    ["MODEL", "IPU STATUS"]
-                )
-                .size()
-                .unstack(fill_value=0)
-                .reset_index()
-            )
-
-            st.markdown("### 📋 Weekly Summary")
-
-            st.dataframe(
-                summary_week,
-                use_container_width=True,
-                hide_index=True
-            )
-
-            st.markdown("### 💻 Device Details")
-
             st.dataframe(
                 week_df,
                 use_container_width=True,
@@ -459,7 +309,7 @@ with tab3:
             )
 
 # =====================================
-# TAB 4 — RAW DATA
+# TAB 4 - RAW DATA
 # =====================================
 with tab4:
 
@@ -470,4 +320,3 @@ with tab4:
         use_container_width=True,
         hide_index=True
     )
-```

@@ -46,7 +46,8 @@ def load_all_sheets():
             return None, f"HTTP Error {response.status_code}"
 
         excel_data = pd.ExcelFile(
-            io.BytesIO(response.content)
+            io.BytesIO(response.content),
+            engine="openpyxl"
         )
 
         all_data = []
@@ -71,7 +72,7 @@ def load_all_sheets():
                 .str.upper()
             )
 
-            # Add week column from sheet name
+            # Add week column
             temp_df["WEEK"] = sheet_name
 
             all_data.append(temp_df)
@@ -165,7 +166,10 @@ df_filtered = df[
 def sort_weeks(week_name):
 
     try:
-        return pd.to_datetime(week_name, format="%d %B %Y")
+        return pd.to_datetime(
+            week_name,
+            format="%d %B %Y"
+        )
     except:
         return pd.Timestamp.min
 
@@ -227,13 +231,17 @@ with tab1:
 
     # KPIs
     completed = int(summary["Completed"].sum())
-    not_completed = int(summary["Not Completed"].sum())
+
+    not_completed = int(
+        summary["Not Completed"].sum()
+    )
+
     total = completed + not_completed
 
-    rate = (
-        completed / total * 100
-        if total > 0 else 0
-    )
+    rate = 0
+
+    if total > 0:
+        rate = completed / total * 100
 
     c1, c2, c3 = st.columns(3)
 
@@ -303,54 +311,71 @@ with tab2:
 
     st.subheader("📅 Weekly Summary")
 
-    weekly_summary = (
-        df_filtered.groupby(
-            ["WEEK", "IPU STATUS"]
+    weekly_rows = []
+
+    for week in sorted_weeks:
+
+        week_df = df_filtered[
+            df_filtered["WEEK"] == week
+        ]
+
+        # MODEL COUNTS
+        acer_total = len(
+            week_df[
+                week_df["MODEL"] == "ACER VX2670G DESKTOP"
+            ]
         )
-        .size()
-        .unstack(fill_value=0)
-        .reset_index()
-    )
 
-    if "Completed" not in weekly_summary.columns:
-        weekly_summary["Completed"] = 0
+        k14_total = len(
+            week_df[
+                week_df["MODEL"] == "LENOVO K14 GEN2"
+            ]
+        )
 
-    if "Not Completed" not in weekly_summary.columns:
-        weekly_summary["Not Completed"] = 0
+        yoga_total = len(
+            week_df[
+                week_df["MODEL"] == "LENOVO L13 YOGA G4"
+            ]
+        )
 
-    weekly_summary["Total"] = (
-        weekly_summary["Completed"]
-        + weekly_summary["Not Completed"]
-    )
+        # STATUS COUNTS
+        completed = len(
+            week_df[
+                week_df["IPU STATUS"] == "Completed"
+            ]
+        )
 
-    weekly_summary["Completion %"] = (
-        weekly_summary["Completed"]
-        / weekly_summary["Total"]
-        * 100
-    ).round(2)
+        not_completed = len(
+            week_df[
+                week_df["IPU STATUS"] == "Not Completed"
+            ]
+        )
 
-    # SORT
-    weekly_summary["SORT_DATE"] = pd.to_datetime(
-        weekly_summary["WEEK"],
-        format="%d %B %Y",
-        errors="coerce"
-    )
+        total = completed + not_completed
 
-    weekly_summary = weekly_summary.sort_values(
-        by="SORT_DATE",
-        ascending=False
-    )
+        completion_rate = 0
+
+        if total > 0:
+            completion_rate = round(
+                completed / total * 100,
+                2
+            )
+
+        weekly_rows.append({
+            "WEEK": week,
+            "ACER VX2670G DESKTOP": acer_total,
+            "LENOVO K14 GEN2": k14_total,
+            "LENOVO L13 YOGA G4": yoga_total,
+            "Completed": completed,
+            "Not Completed": not_completed,
+            "Total": total,
+            "Completion %": completion_rate
+        })
+
+    weekly_summary = pd.DataFrame(weekly_rows)
 
     st.dataframe(
-        weekly_summary[
-            [
-                "WEEK",
-                "Completed",
-                "Not Completed",
-                "Total",
-                "Completion %"
-            ]
-        ],
+        weekly_summary,
         use_container_width=True,
         hide_index=True
     )
@@ -362,7 +387,7 @@ with tab2:
         weekly_summary
     ).mark_line(point=True).encode(
         x=alt.X("WEEK:N", sort=None),
-        y="Completion %:Q",
+        y=alt.Y("Completion %:Q"),
         tooltip=[
             "WEEK",
             "Completed",

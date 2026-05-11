@@ -1,13 +1,3 @@
-Updated full code with:
-
-* ✅ Proper weekly detection
-* ✅ All Weeks Summary
-* ✅ Weekly Breakdown Tables
-* ✅ Auto-detect date columns
-* ✅ Historical week tracking
-* ✅ Current Week KPIs + Charts
-* ✅ Raw data tab
-
 ```python
 import streamlit as st
 import pandas as pd

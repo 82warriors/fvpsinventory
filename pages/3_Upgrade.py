@@ -64,6 +64,7 @@ def load_all_sheets():
                 dtype=str
             )
 
+            # Clean column headers
             temp_df.columns = (
                 temp_df.columns
                 .astype(str)
@@ -71,6 +72,7 @@ def load_all_sheets():
                 .str.upper()
             )
 
+            # Add week column
             temp_df["WEEK"] = sheet_name
 
             all_data.append(temp_df)
@@ -226,7 +228,9 @@ with tab1:
         summary["Total"] * 100
     ).round(2)
 
+    # =====================================
     # KPIs
+    # =====================================
     completed = int(summary["Completed"].sum())
 
     not_completed = int(
@@ -323,10 +327,10 @@ with tab1:
             f"## 🚨 Admin Devices Not Completed ({display_name})"
         )
 
-        filtered = df[
-            (df["MODEL"] == model_name) &
-            (df["CATEGORY"] == "ADMIN") &
-            (df["IPU STATUS"] == "Not Completed")
+        filtered = current_df[
+            (current_df["MODEL"] == model_name) &
+            (current_df["CATEGORY"] == "ADMIN") &
+            (current_df["IPU STATUS"] == "Not Completed")
         ]
 
         if filtered.empty:
@@ -411,7 +415,9 @@ with tab2:
             summary["Total"] * 100
         ).round(2)
 
+        # =====================================
         # TABLE
+        # =====================================
         st.dataframe(
             summary[
                 [
@@ -426,7 +432,9 @@ with tab2:
             hide_index=True
         )
 
+        # =====================================
         # CHART
+        # =====================================
         chart_df = summary.melt(
             id_vars=["MODEL", "Total"],
             value_vars=[

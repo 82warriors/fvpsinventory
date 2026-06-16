@@ -348,9 +348,6 @@ tab1, tab2 = st.tabs([
     "🗄️ Raw Database"
 ])
 
-# ==================================================
-# TAB 1 - HISTORICAL DATABASE
-# ==================================================
 with tab1:
 
     st.subheader("📅 Historical Weekly Breakdown")
@@ -361,65 +358,85 @@ with tab1:
         hide_index=True
     )
 
-# ==================================================
-# BUILD HISTORICAL EXCEPTIONS
-# ==================================================
-@st.cache_data(ttl=60)
-def build_historical_exceptions(sheet_list):
+    st.divider()
 
-    records = []
+    # ==================================================
+    # HISTORICAL EXCEPTIONS
+    # ==================================================
+    st.subheader(
+        "🚨 Historical Devices Not Installed"
+    )
 
-    for sheet in sheet_list:
+    exceptions_df = build_historical_exceptions(
+        sheet_list
+    )
 
-        try:
+    if exceptions_df.empty:
 
-            df = load_sheet(sheet)
+        st.info(
+            "No non-installed devices found."
+        )
 
-            temp = pd.DataFrame({
-                "Week": sheet,
-                "Asset Tag": df.iloc[:, 0],
-                "Serial Number": df.iloc[:, 1],
-                "Brand": df.iloc[:, 5],
-                "Model": df.iloc[:, 6],
-                "Profile": df.iloc[:, 7],
-                "Custodian Name": df.iloc[:, 8],
-                "Status": df.iloc[:, 11]
-            })
+    else:
 
-            temp["Status"] = (
-                temp["Status"]
-                .astype(str)
-                .str.strip()
-                .str.upper()
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            exception_week = st.selectbox(
+                "Week Filter",
+                ["All"] +
+                sorted(
+                    exceptions_df["Week"]
+                    .dropna()
+                    .unique()
+                    .tolist(),
+                    reverse=True
+                ),
+                key="exception_week"
             )
 
-            # Exclude Installed
-            temp = temp[
-                temp["Status"] != "INSTALLED"
+        with col2:
+
+            exception_status = st.selectbox(
+                "Status Filter",
+                ["All"] +
+                sorted(
+                    exceptions_df["Status"]
+                    .dropna()
+                    .unique()
+                    .tolist()
+                ),
+                key="exception_status"
+            )
+
+        filtered_ex = exceptions_df.copy()
+
+        if exception_week != "All":
+
+            filtered_ex = filtered_ex[
+                filtered_ex["Week"]
+                == exception_week
             ]
 
-            records.append(temp)
+        if exception_status != "All":
 
-        except Exception:
-            pass
+            filtered_ex = filtered_ex[
+                filtered_ex["Status"]
+                == exception_status
+            ]
 
-    if not records:
-        return pd.DataFrame()
+        filtered_ex = filtered_ex.drop(
+            columns=["Week_Date"],
+            errors="ignore"
+        )
 
-    result = pd.concat(records, ignore_index=True)
-
-    result["Week_Date"] = pd.to_datetime(
-        result["Week"],
-        dayfirst=True,
-        errors="coerce"
-    )
-
-    result = result.sort_values(
-        by="Week_Date",
-        ascending=False
-    )
-
-    return result
+        st.dataframe(
+            filtered_ex,
+            use_container_width=True,
+            height=500,
+            hide_index=True
+        )
 # ==================================================
 # TAB 2 - RAW DATABASE
 # ==================================================

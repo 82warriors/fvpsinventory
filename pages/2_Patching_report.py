@@ -182,10 +182,6 @@ def build_historical_exceptions(sheet_list):
     return result
 
 
-# ==================================================
-# DEVICE STATUS COUNT
-# ==================================================
-def device_status_count(df):
 
 
 

@@ -83,30 +83,7 @@ def load_sheet(sheet_name):
     df = df.apply(lambda x: x.astype(str).str.strip())
 
     return df
-# ==================================================
-# DEVICE STATUS COUNT
-# ==================================================
-def device_status_count(df):
 
-@st.cache_data(ttl=30)
-def load_sheet(sheet_name):
-
-    encoded = urllib.parse.quote(sheet_name)
-
-    url = (
-        f"https://docs.google.com/spreadsheets/d/"
-        f"{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={encoded}"
-    )
-
-    df = pd.read_csv(url, dtype=str)
-
-    df.columns = df.columns.str.strip().str.upper()
-
-    df = df.fillna("")
-
-    df = df.apply(lambda x: x.astype(str).str.strip())
-
-    return df
 
 
 # ==================================================
@@ -182,10 +159,6 @@ def build_historical_exceptions(sheet_list):
     return result
 
 
-
-
-
-    
 # ==================================================
 # DEVICE STATUS COUNT
 # ==================================================

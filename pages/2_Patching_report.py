@@ -361,7 +361,65 @@ with tab1:
         hide_index=True
     )
 
+# ==================================================
+# BUILD HISTORICAL EXCEPTIONS
+# ==================================================
+@st.cache_data(ttl=60)
+def build_historical_exceptions(sheet_list):
 
+    records = []
+
+    for sheet in sheet_list:
+
+        try:
+
+            df = load_sheet(sheet)
+
+            temp = pd.DataFrame({
+                "Week": sheet,
+                "Asset Tag": df.iloc[:, 0],
+                "Serial Number": df.iloc[:, 1],
+                "Brand": df.iloc[:, 5],
+                "Model": df.iloc[:, 6],
+                "Profile": df.iloc[:, 7],
+                "Custodian Name": df.iloc[:, 8],
+                "Status": df.iloc[:, 11]
+            })
+
+            temp["Status"] = (
+                temp["Status"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
+
+            # Exclude Installed
+            temp = temp[
+                temp["Status"] != "INSTALLED"
+            ]
+
+            records.append(temp)
+
+        except Exception:
+            pass
+
+    if not records:
+        return pd.DataFrame()
+
+    result = pd.concat(records, ignore_index=True)
+
+    result["Week_Date"] = pd.to_datetime(
+        result["Week"],
+        dayfirst=True,
+        errors="coerce"
+    )
+
+    result = result.sort_values(
+        by="Week_Date",
+        ascending=False
+    )
+
+    return result
 # ==================================================
 # TAB 2 - RAW DATABASE
 # ==================================================

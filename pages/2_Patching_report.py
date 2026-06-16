@@ -83,7 +83,113 @@ def load_sheet(sheet_name):
     df = df.apply(lambda x: x.astype(str).str.strip())
 
     return df
+# ==================================================
+# DEVICE STATUS COUNT
+# ==================================================
+def device_status_count(df):
 
+@st.cache_data(ttl=30)
+def load_sheet(sheet_name):
+
+    encoded = urllib.parse.quote(sheet_name)
+
+    url = (
+        f"https://docs.google.com/spreadsheets/d/"
+        f"{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={encoded}"
+    )
+
+    df = pd.read_csv(url, dtype=str)
+
+    df.columns = df.columns.str.strip().str.upper()
+
+    df = df.fillna("")
+
+    df = df.apply(lambda x: x.astype(str).str.strip())
+
+    return df
+
+
+# ==================================================
+# BUILD HISTORICAL EXCEPTIONS
+# ==================================================
+@st.cache_data(ttl=60)
+def build_historical_exceptions(sheet_list):
+
+    records = []
+
+    for sheet in sheet_list:
+
+        try:
+
+            df = load_sheet(sheet)
+
+            temp = pd.DataFrame({
+                "Week": sheet,
+                "Asset Tag": df.iloc[:, 0],
+                "Serial Number": df.iloc[:, 1],
+                "Brand": df.iloc[:, 5],
+                "Model": df.iloc[:, 6],
+                "Profile": df.iloc[:, 7],
+                "Custodian Name": df.iloc[:, 8],
+                "Status": df.iloc[:, 11]
+            })
+
+            temp["Status"] = (
+                temp["Status"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
+
+            valid_statuses = [
+                "SCCM EPP > 4 WKS",
+                "NOT CONNECTED",
+                "REQUIRED",
+                "UNKNOWN",
+                "FAULTY",
+                "E-EXAM",
+                "TECH REFRESH"
+            ]
+
+            temp = temp[
+                temp["Status"].isin(valid_statuses)
+            ]
+
+            records.append(temp)
+
+        except Exception:
+            continue
+
+    if not records:
+        return pd.DataFrame()
+
+    result = pd.concat(
+        records,
+        ignore_index=True
+    )
+
+    result["Week_Date"] = pd.to_datetime(
+        result["Week"],
+        dayfirst=True,
+        errors="coerce"
+    )
+
+    result = result.sort_values(
+        by="Week_Date",
+        ascending=False
+    )
+
+    return result
+
+
+# ==================================================
+# DEVICE STATUS COUNT
+# ==================================================
+def device_status_count(df):
+
+
+
+    
 # ==================================================
 # DEVICE STATUS COUNT
 # ==================================================

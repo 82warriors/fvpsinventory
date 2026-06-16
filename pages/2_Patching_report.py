@@ -361,39 +361,6 @@ with tab1:
         hide_index=True
     )
 
-    # ==============================================
-    # HISTORICAL TREND CHART
-    # ==============================================
-    st.subheader("📈 Historical Installation Trend")
-
-    trend_df = combined_df.copy()
-
-    if selected_device != "All":
-
-        trend_df = trend_df[
-            trend_df["Device"] == selected_device
-        ]
-
-    line_chart = (
-        alt.Chart(trend_df)
-        .mark_line(point=True)
-        .encode(
-            x=alt.X("Week_Date:T", title="Week"),
-            y=alt.Y("% Installed:Q", title="% Installed"),
-            color="Device:N",
-            tooltip=[
-                "Week",
-                "Device",
-                "% Installed"
-            ]
-        )
-        .properties(height=400)
-    )
-
-    st.altair_chart(
-        line_chart,
-        use_container_width=True
-    )
 
 # ==================================================
 # TAB 2 - RAW DATABASE
